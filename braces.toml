@@ -1,0 +1,32 @@
+# Braces configuration — copy to ~/.config/braces/braces.toml to customise
+# All API keys are stored encrypted in the OS keychain, never here.
+
+[ai]
+primary  = "ollama"      # ollama | anthropic | openai | lmstudio | xai | gemini
+fallback = "anthropic"
+autocomplete = true
+
+[providers.anthropic]
+model = "claude-opus-4-8"
+
+[providers.openai]
+model = "gpt-4o-mini"
+
+[providers.ollama]
+host        = "http://localhost:11434"
+model       = "llama3.2"
+embed_model = "nomic-embed-text"
+
+[providers.lmstudio]
+host  = "http://localhost:1234"
+model = "local-model"
+
+[providers.xai]
+model = "grok-3"
+
+[providers.gemini]
+model = "gemini-2.0-flash"
+
+[visual]
+theme   = "neon-noir"    # neon-noir | akira | ghost-protocol | time-warp | minimal
+effects = true           # set false or use --no-gpu flag to disable WebGL

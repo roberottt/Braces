@@ -1,0 +1,42 @@
+[package]
+name = "braces"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+
+[lib]
+name = "braces_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "braces"
+path = "src/main.rs"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+portable-pty = "0.8"
+async-trait = "0.1"
+toml = "0.8"
+thiserror = "2"
+dirs-next = "2"
+
+# Phase 2+ (declared now so the module skeletons compile)
+reqwest = { version = "0.12", features = ["rustls-tls", "stream", "json"], default-features = false }
+futures-util = "0.3"
+eventsource-stream = "0.2"
+keyring = { version = "3", features = ["windows-native"] }
+aes-gcm = "0.10"
+rand = "0.8"
+base64 = "0.22"
+
+# Phase 4+
+sysinfo = "0.33"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
