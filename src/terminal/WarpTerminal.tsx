@@ -59,6 +59,13 @@ const COMMAND_WRAPPERS = new Set([
   "pnpm", "yarn", "bunx", "uvx", "uv", "poetry", "winpty",
 ]);
 
+// In block mode we give ConPTY a very tall virtual screen so that ordinary
+// command output (ls, git log, …) never exceeds the viewport and ConPTY never
+// scrolls. Scrolling makes ConPTY redraw the screen with cursor-positioning the
+// block renderer can't follow — which truncated long listings and left gaps.
+// Interactive programs get the real window height via enterInteractive().
+const BLOCK_ROWS = 2000;
+
 const baseName = (s: string): string =>
   (s.toLowerCase().replace(/\.(exe|cmd|bat|ps1|com)$/, "").split(/[\\/]/).pop() || s);
 
@@ -289,19 +296,22 @@ const WarpTerminal: Component<Props> = (props) => {
     }));
     setTabExitCode(exitCode);
     activeBlockId = "";
+    activeAnsiState = mkAnsiState();
     // Always fire git-refresh after every command completion so the branch pill
     // and change counter update even when the exit code doesn't change value.
     const cwd = tabCwd();
     if (cwd && cwd !== "~") {
       window.dispatchEvent(new CustomEvent("braces:git-refresh", { detail: { cwd } }));
     }
-    // Resize here (activeBlockId is now empty) so any ConPTY screen-buffer
-    // flood triggered by the resize is discarded by appendOutput's early return.
-    // Doing this in submitCmd() instead caused the flood to land in the new block.
-    if (term && (term.cols !== lastPtyCols || term.rows !== lastPtyRows)) {
+    // Resize the PTY only when the window WIDTH changed — the height stays pinned
+    // at BLOCK_ROWS so ConPTY never scrolls in block mode. Keeping rows constant
+    // means there's no resize (and so no screen-buffer re-emit "flood") between
+    // successive commands, which previously corrupted the next block. The resize
+    // runs here with activeBlockId already cleared so any flood is discarded.
+    if (term && term.cols !== lastPtyCols) {
       lastPtyCols = term.cols;
-      lastPtyRows = term.rows;
-      invoke("pty_resize", { tabId: props.tabId, cols: lastPtyCols, rows: lastPtyRows }).catch(() => {});
+      lastPtyRows = BLOCK_ROWS;
+      invoke("pty_resize", { tabId: props.tabId, cols: lastPtyCols, rows: BLOCK_ROWS }).catch(() => {});
     }
     scrollToBottom();
   };
@@ -365,6 +375,13 @@ const WarpTerminal: Component<Props> = (props) => {
     setClaudeImages([]);
     setClaudeText("");
     term?.reset();
+    // Restore the tall block-mode screen so the PTY stops scrolling once the
+    // interactive program (which ran at the real window height) has exited.
+    if (term) {
+      lastPtyCols = term.cols;
+      lastPtyRows = BLOCK_ROWS;
+      invoke("pty_resize", { tabId: props.tabId, cols: term.cols, rows: BLOCK_ROWS }).catch(() => {});
+    }
     setTimeout(() => { inputRef?.focus(); }, 32);
   };
 
@@ -816,7 +833,7 @@ const WarpTerminal: Component<Props> = (props) => {
     window.addEventListener("braces:inject-cmd", onInject);
 
     const cols = Math.max(term.cols, 80);
-    const rows = Math.max(term.rows, 24);
+    const rows = BLOCK_ROWS;
     try {
       await invoke("pty_spawn", { tabId: props.tabId, cols, rows });
       lastPtyCols = cols;
