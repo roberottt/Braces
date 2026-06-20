@@ -67,7 +67,7 @@ const App: Component = () => {
   // ── Persist tabs to DB whenever they change (debounced 400 ms) ─────────────
   let saveTabsTimer: ReturnType<typeof setTimeout> | undefined;
   createEffect(() => {
-    if (!store.hydrated) return; // Only after hydration to avoid overwriting the DB with seed state
+    if (!store.hydrated || !store.persistSessions) return;
     const tabs = store.tabs.map((t) => ({ ...t }));
     const activeTabId = store.activeTabId;
     if (saveTabsTimer) clearTimeout(saveTabsTimer);
@@ -79,12 +79,14 @@ const App: Component = () => {
   });
 
   onMount(async () => {
-    // ── Hydrate tabs from DB ───────────────────────────────────────────────
+    // ── Hydrate tabs from DB (only when session persistence is enabled) ───────
     try {
-      const result = await invoke<{
-        tabs: { id: string; title: string; cwd: string; lastExitCode: number | null }[];
-        activeTabId: string | null;
-      }>("db_load_tabs");
+      const result = store.persistSessions
+        ? await invoke<{
+            tabs: { id: string; title: string; cwd: string; lastExitCode: number | null }[];
+            activeTabId: string | null;
+          }>("db_load_tabs")
+        : { tabs: [], activeTabId: null };
 
       if (result.tabs.length > 0) {
         setStore("tabs", result.tabs);

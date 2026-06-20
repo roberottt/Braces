@@ -72,6 +72,12 @@ const SettingsModal: Component = () => {
     localStorage.setItem("braces_effects", String(next));
   };
 
+  const togglePersistSessions = () => {
+    const next = !store.persistSessions;
+    setStore("persistSessions", next);
+    localStorage.setItem("braces_persist_sessions", String(next));
+  };
+
   const setLang = (l: Lang) => {
     setStore("language", l);
     localStorage.setItem("braces_language", l);
@@ -172,6 +178,17 @@ const SettingsModal: Component = () => {
               </div>
               <button class={`stoggle${store.effectsEnabled ? " on" : ""}`} onClick={toggleEffects}>
                 {store.effectsEnabled ? tr("on") : tr("off")}
+              </button>
+            </div>
+
+            {/* Session persistence */}
+            <div class="sfield sfield-row">
+              <div>
+                <label class="slabel">{tr("persist_sessions")}</label>
+                <p class="sdesc">{tr("persist_sessions_desc")}</p>
+              </div>
+              <button class={`stoggle${store.persistSessions ? " on" : ""}`} onClick={togglePersistSessions}>
+                {store.persistSessions ? tr("on") : tr("off")}
               </button>
             </div>
 

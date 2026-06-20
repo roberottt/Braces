@@ -17,6 +17,8 @@ export type TerminalStore = {
   model: string;
   /** True once tabs have been loaded from the DB (or confirmed empty). */
   hydrated: boolean;
+  /** Whether terminal sessions and block history persist across app restarts. */
+  persistSessions: boolean;
   sidePanelOpen: boolean;
   metricsOpen: boolean;
   effectsEnabled: boolean;
@@ -60,6 +62,7 @@ export const [store, setStore] = createStore<TerminalStore>({
   provider: "ollama",
   model: "llama3.2",
   hydrated: false,
+  persistSessions: (localStorage.getItem("braces_persist_sessions") ?? "true") !== "false",
   sidePanelOpen: false,
   metricsOpen: false,
   effectsEnabled: true,

@@ -169,6 +169,7 @@ const WarpTerminal: Component<Props> = (props) => {
   // restore every loaded block is forced done (its PTY is gone) so it renders as a
   // finished history card.
   const persistBlocks = () => {
+    if (!store.persistSessions) return;
     const all = blocks().filter((b) => b.cmd);
     invoke("db_save_blocks", { tabId: props.tabId, blocks: all }).catch((e) =>
       console.error("[braces] db_save_blocks failed:", e)
@@ -179,6 +180,7 @@ const WarpTerminal: Component<Props> = (props) => {
   // output and unexpected app closure before a block formally completes).
   let saveBlocksTimer: ReturnType<typeof setTimeout> | undefined;
   createEffect(() => {
+    if (!store.persistSessions) return;
     const all = blocks();
     if (all.length === 0) return;
     if (saveBlocksTimer) clearTimeout(saveBlocksTimer);
