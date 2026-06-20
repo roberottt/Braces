@@ -68,12 +68,12 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
 
 /* Themes only swap the accent palette — backgrounds stay pure black/neutral. */
 [data-theme="akira"] {
-  --accent:     #c45272;   /* muted crimson rose */
-  --accent-2:   #e08aa6;
-  --accent-hover:#d47890;
-  --accent-lime:#c45272;
-  --accent-cyan:#d47890;
-  --accent-amber:#a03050;
+  --accent:     #9a78d4;   /* soft medium purple */
+  --accent-2:   #c4a8e8;
+  --accent-hover:#b08ae0;
+  --accent-lime:#9a78d4;
+  --accent-cyan:#b08ae0;
+  --accent-amber:#7a5ab0;
 }
 
 [data-theme="ghost-protocol"] {
@@ -1133,7 +1133,7 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   height: 300px;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 45%, transparent));
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
 }
 
 /* Boot log */
@@ -2328,7 +2328,7 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   height: 14px;
   border-radius: 50%;
   background: var(--t-accent, var(--accent));
-  box-shadow: 0 0 8px color-mix(in srgb, var(--t-accent, var(--accent)) 60%, transparent);
+  box-shadow: none;
 }
 
 /* Toggle button */
@@ -3114,8 +3114,8 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
 .rv-code {
   font-family: var(--font-term);
   font-size: 10px;
-  color: #f472b6;
-  background: color-mix(in srgb, #f472b6 10%, transparent);
+  color: #c084fc;
+  background: color-mix(in srgb, #c084fc 10%, transparent);
   padding: 1px 4px;
   border-radius: 3px;
 }
