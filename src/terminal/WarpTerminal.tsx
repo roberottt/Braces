@@ -163,6 +163,20 @@ const WarpTerminal: Component<Props> = (props) => {
   const [claudeImages, setClaudeImages] = createSignal<ClaudeImage[]>([]);
   const [blocks, setBlocks] = createSignal<CommandBlock[]>([]);
 
+  // Safety-net: persist done blocks to DB whenever the blocks signal changes.
+  // Complements the save inside closeBlock so blocks survive unexpected app closure.
+  let saveBlocksTimer: ReturnType<typeof setTimeout> | undefined;
+  createEffect(() => {
+    const doneBlocks = blocks().filter((b) => b.done);
+    if (doneBlocks.length === 0) return;
+    if (saveBlocksTimer) clearTimeout(saveBlocksTimer);
+    saveBlocksTimer = setTimeout(() => {
+      invoke("db_save_blocks", { tabId: props.tabId, blocks: doneBlocks }).catch((e) =>
+        console.error("[braces] db_save_blocks (effect) failed:", e)
+      );
+    }, 800);
+  });
+
   const isClaudeSession = () =>
     isInteractive() && /^(?:npx\s+)?claude(?:\s|$)/i.test(interactiveCmd().trim());
 
@@ -297,9 +311,11 @@ const WarpTerminal: Component<Props> = (props) => {
     setTabExitCode(exitCode);
     activeBlockId = "";
     activeAnsiState = mkAnsiState();
-    // Persist all completed blocks to SQLite
+    // Persist all completed blocks to SQLite (errors surface in the console)
     const doneBlocks = blocks().filter(b => b.done);
-    invoke("db_save_blocks", { tabId: props.tabId, blocks: doneBlocks }).catch(() => {});
+    invoke("db_save_blocks", { tabId: props.tabId, blocks: doneBlocks }).catch((e) =>
+      console.error("[braces] db_save_blocks failed:", e)
+    );
     // Always fire git-refresh after every command completion so the branch pill
     // and change counter update even when the exit code doesn't change value.
     const cwd = tabCwd();
@@ -844,6 +860,7 @@ const WarpTerminal: Component<Props> = (props) => {
     let isRestoredTab = false;
     try {
       const savedBlocks = await invoke<CommandBlock[]>("db_load_blocks", { tabId: props.tabId });
+      console.debug("[braces] db_load_blocks", props.tabId, "→", savedBlocks.length, "blocks");
       if (savedBlocks.length > 0) {
         setBlocks(savedBlocks);
         isRestoredTab = true;
