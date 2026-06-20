@@ -6,11 +6,11 @@ import { t, type Lang } from "../i18n";
 type Tab = "appearance" | "ai" | "keys";
 
 const THEMES = [
-  { id: "neon-noir",      label: "Graphite",       accent: "#8aa0ff" },
-  { id: "akira",          label: "Akira",          accent: "#c45272" },
-  { id: "ghost-protocol", label: "Ghost Protocol", accent: "#72aa50" },
-  { id: "time-warp",      label: "Time Warp",      accent: "#c08840" },
-  { id: "minimal",        label: "Minimal",        accent: "#cccccc" },
+  { id: "neon-noir",      label: "Anakin",         accent: "#8aa0ff" },
+  { id: "akira",          label: "Mace Windu",     accent: "#9a78d4" },
+  { id: "ghost-protocol", label: "Yoda",           accent: "#72aa50" },
+  { id: "time-warp",      label: "C-3PO",          accent: "#c08840" },
+  { id: "minimal",        label: "Stormtrooper",   accent: "#cccccc" },
 ] as const;
 
 const PROVIDERS: Provider[] = ["ollama", "anthropic", "openai", "lmstudio", "xai", "gemini"];
@@ -66,10 +66,10 @@ const SettingsModal: Component = () => {
     localStorage.setItem("braces_theme", id);
   };
 
-  const toggleEffects = () => {
-    const next = !store.effectsEnabled;
-    setStore("effectsEnabled", next);
-    localStorage.setItem("braces_effects", String(next));
+  const togglePersistSessions = () => {
+    const next = !store.persistSessions;
+    setStore("persistSessions", next);
+    localStorage.setItem("braces_persist_sessions", String(next));
   };
 
   const setLang = (l: Lang) => {
@@ -164,14 +164,14 @@ const SettingsModal: Component = () => {
               </div>
             </div>
 
-            {/* Visual effects */}
+            {/* Session persistence */}
             <div class="sfield sfield-row">
               <div>
-                <label class="slabel">{tr("visual_effects")}</label>
-                <p class="sdesc">{tr("visual_effects_desc")}</p>
+                <label class="slabel">{tr("persist_sessions")}</label>
+                <p class="sdesc">{tr("persist_sessions_desc")}</p>
               </div>
-              <button class={`stoggle${store.effectsEnabled ? " on" : ""}`} onClick={toggleEffects}>
-                {store.effectsEnabled ? tr("on") : tr("off")}
+              <button class={`stoggle${store.persistSessions ? " on" : ""}`} onClick={togglePersistSessions}>
+                {store.persistSessions ? tr("on") : tr("off")}
               </button>
             </div>
 

@@ -1,4 +1,5 @@
 import { Component, For, Show, createSignal } from "solid-js";
+import { invoke } from "@tauri-apps/api/core";
 import { store, setStore, genTabId, type Tab } from "../store/terminalStore";
 import { t } from "../i18n";
 
@@ -48,6 +49,10 @@ const TabSidebar: Component = () => {
       if (next) { setStore("activeTabId", next.id); setStore("cwd", next.cwd); setStore("lastExitCode", next.lastExitCode); }
     }
     setStore("tabs", remaining);
+    // Remove the tab and its blocks from persistent storage
+    invoke("db_delete_tab", { tabId: id }).catch((err) =>
+      console.error("[braces] db_delete_tab failed:", err)
+    );
   };
 
   const activateTab = (tab: Tab) => {
@@ -181,11 +186,11 @@ const TabSidebar: Component = () => {
       {/* Header */}
       <div class="tab-sidebar-header">
         <div class="ws-dock-toggle">
-          <button class="ws-dock-btn active">SESSIONS</button>
+          <button class="ws-dock-btn active">{t(store.language, "sessions")}</button>
           <button class="ws-dock-btn"
             title={t(store.language, "file_explorer_tip")}
             onClick={() => { setStore("leftDockView", "files"); setStore("workspaceOpen", true); }}
-          >FILES</button>
+          >{t(store.language, "files_label")}</button>
         </div>
         <div class="tab-sidebar-actions">
           <button class="tab-sidebar-btn" title={t(store.language, "new_session_tip")} onClick={newTab}>+</button>

@@ -20,7 +20,6 @@ function drawEye(ctx: CanvasRenderingContext2D, W: number, H: number) {
   ctx.fillRect(0, 0, W, H);
 
   // ── Radiating speed lines ────────────────────────────────────────────────
-  // Use deterministic "pseudo-random" so the eye looks the same every time
   const det = (i: number, offset = 0) =>
     ((Math.sin(i * 127.1 + offset) * 43758.5453) % 1 + 1) % 1;
 
@@ -49,13 +48,14 @@ function drawEye(ctx: CanvasRenderingContext2D, W: number, H: number) {
 
   // ── Dramatic thick spikes (the manga "speed lines") ──────────────────────
   const thickAngles = [
-    -0.95, -0.35, 0.1, 0.55, 1.1,       // upper-right cluster
-    Math.PI * 0.9, Math.PI * 1.1,        // left
-    -Math.PI * 0.5, -Math.PI * 0.4,      // up
-    Math.PI * 0.3, Math.PI * 0.45,       // lower-right
+    -0.95, -0.35, 0.1, 0.55, 1.1,
+    Math.PI * 0.9, Math.PI * 1.1,
+    -Math.PI * 0.5, -Math.PI * 0.4,
+    Math.PI * 0.3, Math.PI * 0.45,
   ];
 
   thickAngles.forEach((ang, idx) => {
+    const a   = ang;
     const len = R * (0.75 + det(idx, 7) * 0.35);
     const w   = 1.8 + det(idx, 8) * 2.2;
 
@@ -67,11 +67,10 @@ function drawEye(ctx: CanvasRenderingContext2D, W: number, H: number) {
     ctx.shadowColor = CYAN;
     ctx.beginPath();
     ctx.moveTo(CX, CY);
-    ctx.lineTo(CX + Math.cos(ang) * len, CY + Math.sin(ang) * len);
+    ctx.lineTo(CX + Math.cos(a) * len, CY + Math.sin(a) * len);
     ctx.stroke();
 
-    // Parallel ghost line
-    const perp = ang + Math.PI / 2;
+    const perp = a + Math.PI / 2;
     const off  = 4 + det(idx, 9) * 5;
     ctx.lineWidth   = w * 0.35;
     ctx.globalAlpha = 0.3;
@@ -79,8 +78,8 @@ function drawEye(ctx: CanvasRenderingContext2D, W: number, H: number) {
     ctx.beginPath();
     ctx.moveTo(CX + Math.cos(perp) * off, CY + Math.sin(perp) * off);
     ctx.lineTo(
-      CX + Math.cos(perp) * off + Math.cos(ang) * len * 0.85,
-      CY + Math.sin(perp) * off + Math.sin(ang) * len * 0.85,
+      CX + Math.cos(perp) * off + Math.cos(a) * len * 0.85,
+      CY + Math.sin(perp) * off + Math.sin(a) * len * 0.85,
     );
     ctx.stroke();
     ctx.restore();
@@ -126,7 +125,6 @@ function drawEye(ctx: CanvasRenderingContext2D, W: number, H: number) {
   ctx.arc(CX + 2, CY + 6, R * 0.20, Math.PI * 0.55, Math.PI * 1.45);
   ctx.fill();
 
-  // Hollow the crescent — cut out inner arc
   ctx.globalCompositeOperation = "destination-out";
   ctx.beginPath();
   ctx.arc(CX + 2, CY + 14, R * 0.17, Math.PI * 0.4, Math.PI * 1.6);
@@ -180,7 +178,6 @@ function pixelate(
 
   for (let py = 0; py < dh; py += blockSize) {
     for (let px = 0; px < dw; px += blockSize) {
-      // Sample center of block from source
       const sx = Math.floor((px + blockSize / 2) * scaleX);
       const sy = Math.floor((py + blockSize / 2) * scaleY);
       const idx = (sy * sw + sx) * 4;
@@ -188,7 +185,6 @@ function pixelate(
       const r = data[idx], g = data[idx + 1], b = data[idx + 2], a = data[idx + 3];
       if (a < 8) continue;
 
-      // Leave a 1px gap around each "pixel" for the grid look
       const gap = blockSize > 3 ? 1 : 0;
       dCtx.fillStyle = `rgba(${r},${g},${b},${a / 255})`;
       dCtx.fillRect(px + gap, py + gap, blockSize - gap * 2, blockSize - gap * 2);
@@ -223,19 +219,19 @@ const NewSessionSplash: Component<Props> = (props) => {
   };
 
   onMount(() => {
-    // Draw hi-res eye on offscreen canvas then pixelate onto display canvas
-    const OFF_SIZE = 480;
+    const OFF_SIZE  = 480;
     const DISP_SIZE = 240;
-    const BLOCK = 4; // 4px blocks → pixelated grid
+    const BLOCK     = 4;
 
-    offscreenCanvas = document.createElement("canvas");
+    offscreenCanvas        = document.createElement("canvas");
     offscreenCanvas.width  = OFF_SIZE;
     offscreenCanvas.height = OFF_SIZE;
     const offCtx = offscreenCanvas.getContext("2d")!;
-    drawEye(offCtx, OFF_SIZE, OFF_SIZE);
 
     displayCanvas.width  = DISP_SIZE;
     displayCanvas.height = DISP_SIZE;
+
+    drawEye(offCtx, OFF_SIZE, OFF_SIZE);
     pixelate(offscreenCanvas, displayCanvas, BLOCK);
 
     // Boot text typewriter effect
@@ -246,38 +242,33 @@ const NewSessionSplash: Component<Props> = (props) => {
       if (lineIdx >= BOOT_LINES.length) clearInterval(bootInterval);
     }, 220);
 
-    // Auto-dismiss after lines finish + pause
     const autoDismiss = setTimeout(() => dismiss(), BOOT_LINES.length * 220 + 1800);
 
     const onKey = () => dismiss();
     window.addEventListener("keydown", onKey, { once: true });
-    window.addEventListener("click", onKey, { once: true });
+    window.addEventListener("click",   onKey, { once: true });
 
     onCleanup(() => {
       clearInterval(bootInterval);
       clearTimeout(autoDismiss);
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("click", onKey);
+      window.removeEventListener("click",   onKey);
     });
   });
 
   return (
     <div class={`session-splash${fading() ? " fading" : ""}`}>
-      {/* Corner brackets */}
       <div class="ss-corner ss-tl" />
       <div class="ss-corner ss-tr" />
       <div class="ss-corner ss-bl" />
       <div class="ss-corner ss-br" />
 
-      {/* Scanline overlay */}
       <div class="ss-scanlines" />
 
-      {/* Eye canvas */}
       <div class="ss-eye-wrap">
         <canvas ref={displayCanvas!} class="ss-canvas" />
       </div>
 
-      {/* Boot text */}
       <div class="ss-boot-log">
         {BOOT_LINES.slice(0, bootLine()).map((line, i) => (
           <div

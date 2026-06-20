@@ -29,6 +29,7 @@ impl PtySession {
         cols: u16,
         rows: u16,
         output: Arc<OutputBuffer>,
+        start_cwd: Option<String>,
     ) -> Result<Self, PtyError> {
         let pty_system = native_pty_system();
         let pair = pty_system
@@ -36,9 +37,14 @@ impl PtySession {
             .map_err(|e| PtyError::Pty(e.to_string()))?;
 
         let (mut cmd, shell_type) = default_shell_cmd();
-        // Start the shell in the user's home directory for a consistent experience.
-        if let Some(home) = dirs_next::home_dir() {
-            cmd.cwd(home);
+        // Use the provided cwd if it exists on disk; fall back to the home directory.
+        let effective_cwd = start_cwd
+            .as_deref()
+            .map(std::path::PathBuf::from)
+            .filter(|p| p.is_dir())
+            .or_else(dirs_next::home_dir);
+        if let Some(dir) = effective_cwd {
+            cmd.cwd(dir);
         }
         let child = pair.slave.spawn_command(cmd).map_err(|e| PtyError::Pty(e.to_string()))?;
 

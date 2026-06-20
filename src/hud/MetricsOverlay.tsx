@@ -1,6 +1,7 @@
 import { Component, createSignal, onCleanup, onMount } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
-import { setStore } from "../store/terminalStore";
+import { store, setStore } from "../store/terminalStore";
+import { t } from "../i18n";
 
 type Metrics = { cpu_percent: number; ram_used_mb: number; ram_total_mb: number };
 
@@ -43,7 +44,7 @@ const MetricsOverlay: Component = () => {
       </div>
 
       <div class="mo-header">
-        <span>SYSTEM</span>
+        <span>{t(store.language, "system_label")}</span>
         <span
           style={{ cursor: "pointer", opacity: 0.6 }}
           onClick={() => setStore("metricsOpen", false)}
@@ -75,7 +76,7 @@ const MetricsOverlay: Component = () => {
       <div class="mo-query-row">
         <input
           class="mo-query-input"
-          placeholder="what's eating my RAM?"
+          placeholder={t(store.language, "ram_query_ph")}
           value={query()}
           onInput={(e) => setQuery(e.currentTarget.value)}
           onKeyDown={(e) => { if (e.key === "Enter") askProcesses(); }}

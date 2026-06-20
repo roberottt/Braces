@@ -1,6 +1,7 @@
 import { Component, createSignal, For, onCleanup, onMount } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { store, setStore } from "../store/terminalStore";
+import { t } from "../i18n";
 
 const HistoryOverlay: Component = () => {
   const [query, setQuery] = createSignal("");
@@ -54,11 +55,11 @@ const HistoryOverlay: Component = () => {
   return (
     <div class="history-overlay">
       <div class="ho-input-row">
-        <span class="ho-label">SEMANTIC HISTORY</span>
+        <span class="ho-label">{t(store.language, "semantic_history")}</span>
         <input
           ref={inputRef}
           class="ho-input"
-          placeholder="search commands…"
+          placeholder={t(store.language, "search_commands_ph")}
           value={query()}
           onInput={(e) => { setQuery(e.currentTarget.value); search(e.currentTarget.value); }}
           onKeyDown={onKey}

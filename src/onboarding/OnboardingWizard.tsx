@@ -16,7 +16,6 @@ const OnboardingWizard: Component<Props> = (props) => {
   const [apiKey, setApiKey] = createSignal("");
   const [host, setHost] = createSignal("http://localhost:11434");
   const [theme, setTheme] = createSignal("neon-noir");
-  const [effects, setEffects] = createSignal(true);
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
 
@@ -42,13 +41,11 @@ const OnboardingWizard: Component<Props> = (props) => {
       setStore("provider", p as any);
       setStore("model", model);
       setStore("theme", theme());
-      setStore("effectsEnabled", effects());
       document.documentElement.setAttribute("data-theme", theme());
       // Persist so the choices survive a restart (App.tsx reads these on boot).
       localStorage.setItem("braces_provider", p);
       localStorage.setItem("braces_model", model);
       localStorage.setItem("braces_theme", theme());
-      localStorage.setItem("braces_effects", String(effects()));
       if (NEEDS_HOST.includes(p) && host().trim()) {
         localStorage.setItem(`braces_host_${p}`, host().trim());
       }
@@ -139,17 +136,6 @@ const OnboardingWizard: Component<Props> = (props) => {
             </div>
           </div>
 
-          <div class="ow-field">
-            <label class="ow-label">
-              <input
-                type="checkbox"
-                checked={effects()}
-                onChange={(e) => setEffects(e.currentTarget.checked)}
-                style={{ "margin-right": "8px" }}
-              />
-              ENABLE VISUAL EFFECTS (scanlines, grain, glow)
-            </label>
-          </div>
         </Show>
 
         {/* Step 2: Confirm */}
@@ -157,7 +143,6 @@ const OnboardingWizard: Component<Props> = (props) => {
           <div style={{ color: "var(--fg-mid)", "font-size": "13px", "line-height": "1.8" }}>
             <div><span style={{ color: "var(--accent)" }}>Provider:</span> {provider()}</div>
             <div><span style={{ color: "var(--accent)" }}>Theme:</span> {theme()}</div>
-            <div><span style={{ color: "var(--accent)" }}>Effects:</span> {effects() ? "on" : "off"}</div>
           </div>
           <p style={{ "margin-top": "16px", "font-size": "11px", color: "var(--fg-dim)" }}>
             API keys are encrypted with AES-256-GCM and stored in the OS keychain.

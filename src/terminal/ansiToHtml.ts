@@ -6,6 +6,42 @@ const PAL = [
   '#a6b6ff','#c4a3f5','#9ee0db','#ffffff',
 ];
 
+/** Parse '#rrggbb' or 'rgb(r,g,b)' to [r,g,b]; null if unrecognised. */
+function parseColor(c: string): [number, number, number] | null {
+  if (c[0] === '#' && c.length === 7) {
+    return [
+      parseInt(c.slice(1, 3), 16),
+      parseInt(c.slice(3, 5), 16),
+      parseInt(c.slice(5, 7), 16),
+    ];
+  }
+  const m = /^rgb\((\d+),(\d+),(\d+)\)$/.exec(c);
+  if (m) return [+m[1], +m[2], +m[3]];
+  return null;
+}
+
+/**
+ * The block background is pure black (#000). Terminal themes (Terminal-Icons,
+ * oh-my-posh, custom $PSStyle…) frequently colour entries with near-black 256 or
+ * 24-bit values that vanish against it. Raise any too-dark foreground to a
+ * minimum perceived brightness so it stays legible. Only applied when there is
+ * no explicit background — dark-on-light combos are intentional and left alone.
+ */
+function ensureVisible(color: string): string {
+  const rgb = parseColor(color);
+  if (!rgb) return color;
+  let [r, g, b] = rgb;
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  const MIN = 80;
+  if (lum >= MIN) return color;
+  if (r + g + b < 12) return '#9aa0ad'; // pure/near black → neutral graphite grey
+  const f = MIN / Math.max(lum, 1);
+  r = Math.min(255, Math.round(r * f));
+  g = Math.min(255, Math.round(g * f));
+  b = Math.min(255, Math.round(b * f));
+  return `rgb(${r},${g},${b})`;
+}
+
 function c256(n: number): string {
   if (n < 16) return PAL[n];
   if (n < 232) {
@@ -31,7 +67,7 @@ function toCSS(s: AnsiState): string {
   if (s.dim)       r.push('opacity:.5');
   if (s.italic)    r.push('font-style:italic');
   if (s.underline) r.push('text-decoration:underline');
-  if (s.fg)        r.push(`color:${s.fg}`);
+  if (s.fg)        r.push(`color:${s.bg ? s.fg : ensureVisible(s.fg)}`);
   if (s.bg)        r.push(`background-color:${s.bg}`);
   return r.join(';');
 }

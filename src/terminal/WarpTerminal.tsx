@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { store, setStore } from "../store/terminalStore";
+import { t } from "../i18n";
 import { getShellInitScript } from "./shellInit";
 import { ansiChunkToHtml, mkAnsiState, type AnsiState } from "./ansiToHtml";
 import NewSessionWelcome from "./NewSessionWelcome";
@@ -58,6 +59,13 @@ const COMMAND_WRAPPERS = new Set([
   "npx", "sudo", "doas", "command", "env", "time", "nice", "stdbuf",
   "pnpm", "yarn", "bunx", "uvx", "uv", "poetry", "winpty",
 ]);
+
+// In block mode we give ConPTY a very tall virtual screen so that ordinary
+// command output (ls, git log, …) never exceeds the viewport and ConPTY never
+// scrolls. Scrolling makes ConPTY redraw the screen with cursor-positioning the
+// block renderer can't follow — which truncated long listings and left gaps.
+// Interactive programs get the real window height via enterInteractive().
+const BLOCK_ROWS = 2000;
 
 const baseName = (s: string): string =>
   (s.toLowerCase().replace(/\.(exe|cmd|bat|ps1|com)$/, "").split(/[\\/]/).pop() || s);
@@ -155,6 +163,30 @@ const WarpTerminal: Component<Props> = (props) => {
   const [claudeText, setClaudeText] = createSignal("");
   const [claudeImages, setClaudeImages] = createSignal<ClaudeImage[]>([]);
   const [blocks, setBlocks] = createSignal<CommandBlock[]>([]);
+
+  // Persist blocks to SQLite. Saves ALL blocks with a command — NOT just the ones
+  // marked done. Some shells never emit the prompt marker that fires closeBlock(),
+  // so filtering on `done` left those sessions with an empty blocks table. On
+  // restore every loaded block is forced done (its PTY is gone) so it renders as a
+  // finished history card.
+  const persistBlocks = () => {
+    if (!store.persistSessions) return;
+    const all = blocks().filter((b) => b.cmd);
+    invoke("db_save_blocks", { tabId: props.tabId, blocks: all }).catch((e) =>
+      console.error("[braces] db_save_blocks failed:", e)
+    );
+  };
+
+  // Safety-net: debounced save whenever the blocks signal changes (covers streaming
+  // output and unexpected app closure before a block formally completes).
+  let saveBlocksTimer: ReturnType<typeof setTimeout> | undefined;
+  createEffect(() => {
+    if (!store.persistSessions) return;
+    const all = blocks();
+    if (all.length === 0) return;
+    if (saveBlocksTimer) clearTimeout(saveBlocksTimer);
+    saveBlocksTimer = setTimeout(persistBlocks, 500);
+  });
 
   const isClaudeSession = () =>
     isInteractive() && /^(?:npx\s+)?claude(?:\s|$)/i.test(interactiveCmd().trim());
@@ -289,19 +321,24 @@ const WarpTerminal: Component<Props> = (props) => {
     }));
     setTabExitCode(exitCode);
     activeBlockId = "";
+    activeAnsiState = mkAnsiState();
+    // Persist blocks to SQLite (errors surface in the console)
+    persistBlocks();
     // Always fire git-refresh after every command completion so the branch pill
     // and change counter update even when the exit code doesn't change value.
     const cwd = tabCwd();
     if (cwd && cwd !== "~") {
       window.dispatchEvent(new CustomEvent("braces:git-refresh", { detail: { cwd } }));
     }
-    // Resize here (activeBlockId is now empty) so any ConPTY screen-buffer
-    // flood triggered by the resize is discarded by appendOutput's early return.
-    // Doing this in submitCmd() instead caused the flood to land in the new block.
-    if (term && (term.cols !== lastPtyCols || term.rows !== lastPtyRows)) {
+    // Resize the PTY only when the window WIDTH changed — the height stays pinned
+    // at BLOCK_ROWS so ConPTY never scrolls in block mode. Keeping rows constant
+    // means there's no resize (and so no screen-buffer re-emit "flood") between
+    // successive commands, which previously corrupted the next block. The resize
+    // runs here with activeBlockId already cleared so any flood is discarded.
+    if (term && term.cols !== lastPtyCols) {
       lastPtyCols = term.cols;
-      lastPtyRows = term.rows;
-      invoke("pty_resize", { tabId: props.tabId, cols: lastPtyCols, rows: lastPtyRows }).catch(() => {});
+      lastPtyRows = BLOCK_ROWS;
+      invoke("pty_resize", { tabId: props.tabId, cols: lastPtyCols, rows: BLOCK_ROWS }).catch(() => {});
     }
     scrollToBottom();
   };
@@ -365,6 +402,13 @@ const WarpTerminal: Component<Props> = (props) => {
     setClaudeImages([]);
     setClaudeText("");
     term?.reset();
+    // Restore the tall block-mode screen so the PTY stops scrolling once the
+    // interactive program (which ran at the real window height) has exited.
+    if (term) {
+      lastPtyCols = term.cols;
+      lastPtyRows = BLOCK_ROWS;
+      invoke("pty_resize", { tabId: props.tabId, cols: term.cols, rows: BLOCK_ROWS }).catch(() => {});
+    }
     setTimeout(() => { inputRef?.focus(); }, 32);
   };
 
@@ -589,6 +633,8 @@ const WarpTerminal: Component<Props> = (props) => {
           setBlocks([]);
           activeBlockId = "";
           activeAnsiState = mkAnsiState();
+          // Clear persisted blocks for this tab too
+          invoke("db_save_blocks", { tabId: props.tabId, blocks: [] }).catch(() => {});
         }
         return;
     }
@@ -816,16 +862,36 @@ const WarpTerminal: Component<Props> = (props) => {
     window.addEventListener("braces:inject-cmd", onInject);
 
     const cols = Math.max(term.cols, 80);
-    const rows = Math.max(term.rows, 24);
+    const rows = BLOCK_ROWS;
+
+    // ── Restore blocks saved from the previous session ───────────────────
+    let isRestoredTab = false;
     try {
-      await invoke("pty_spawn", { tabId: props.tabId, cols, rows });
+      const savedBlocks = await invoke<CommandBlock[]>("db_load_blocks", { tabId: props.tabId });
+      console.debug("[braces] db_load_blocks", props.tabId, "→", savedBlocks.length, "blocks");
+      if (savedBlocks.length > 0) {
+        // The PTY these blocks belonged to is gone — render them as finished
+        // history cards (any block left mid-run when the app closed shows as done).
+        setBlocks(savedBlocks.map((b) => ({ ...b, done: true })));
+        isRestoredTab = true;
+      }
+    } catch (e) {
+      console.error("[braces] db_load_blocks failed:", e);
+    }
+
+    try {
+      // Pass the saved cwd so the new shell starts in the right directory
+      const savedCwd = tabCwd();
+      const cwd = savedCwd && savedCwd !== "~" ? savedCwd : undefined;
+      await invoke("pty_spawn", { tabId: props.tabId, cols, rows, cwd });
       lastPtyCols = cols;
       lastPtyRows = rows;
       ptyReadyRef = true;
       setPtyReady(true);
 
       const homeDir: string = await invoke("pty_home_dir");
-      setTabCwd(homeDir);
+      // Only reset cwd to home for brand-new tabs; restored tabs keep their saved cwd
+      if (!isRestoredTab) setTabCwd(homeDir);
 
       const shellType: string = await invoke("pty_shell_type", { tabId: props.tabId });
       const init = getShellInitScript(shellType);
@@ -847,6 +913,9 @@ const WarpTerminal: Component<Props> = (props) => {
     }
 
     onCleanup(() => {
+      // Final flush so anything not yet caught by the debounce is persisted.
+      if (saveBlocksTimer) clearTimeout(saveBlocksTimer);
+      persistBlocks();
       unlistenPty();
       unlistenAnalysis();
       ro.disconnect();
@@ -955,10 +1024,10 @@ const WarpTerminal: Component<Props> = (props) => {
                 if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitClaudeMessage(); }
               }}
               onPaste={handleClaudePaste}
-              placeholder="Message Claude… (Shift+Enter for newline · ↑↓ Enter navigate menus)"
+              placeholder={t(store.language, "msg_claude_ph")}
               rows={1}
             />
-            <button class="claude-send-btn" title="Send (Enter)" onClick={submitClaudeMessage}>↵</button>
+            <button class="claude-send-btn" title={t(store.language, "send_enter")} onClick={submitClaudeMessage}>↵</button>
           </div>
         </div>
       </Show>
@@ -969,8 +1038,8 @@ const WarpTerminal: Component<Props> = (props) => {
         <Show when={showBranchPanel() && branches().length > 0}>
           <div class="branch-panel">
             <div class="branch-panel-header">
-              <span class="branch-panel-title">RAMAS</span>
-              <span class="branch-panel-hint"><kbd>↵</kbd> cambiar &nbsp;·&nbsp; <kbd>esc</kbd> cerrar</span>
+              <span class="branch-panel-title">{t(store.language, "branches_panel")}</span>
+              <span class="branch-panel-hint">{t(store.language, "branch_hint")}</span>
               <button class="branch-panel-close" onClick={() => setShowBranchPanel(false)}>✕</button>
             </div>
             <div class="branch-panel-list">
@@ -1000,10 +1069,8 @@ const WarpTerminal: Component<Props> = (props) => {
         <Show when={showTabPanel() && tabCompletions().length > 0}>
           <div class="tab-comp-panel" ref={tabPanelRef}>
             <div class="tab-comp-header">
-              <span class="tab-comp-title">COMPLETIONS</span>
-              <span class="tab-comp-hint">
-                <kbd>Tab</kbd> / <kbd>↑↓</kbd> navegar &nbsp;·&nbsp; <kbd>↵</kbd> ejecutar &nbsp;·&nbsp; <kbd>esc</kbd> cancelar
-              </span>
+              <span class="tab-comp-title">{t(store.language, "completions_panel")}</span>
+              <span class="tab-comp-hint">{t(store.language, "completions_hint")}</span>
             </div>
             <div class="tab-comp-list">
               <For each={tabCompletions()}>
@@ -1031,10 +1098,8 @@ const WarpTerminal: Component<Props> = (props) => {
         <Show when={showHistPanel() && cmdHistory().length > 0}>
           <div class="hist-panel" ref={histPanelRef}>
             <div class="hist-panel-header">
-              <span class="hist-panel-title">HISTORY</span>
-              <span class="hist-panel-hint">
-                <kbd>↑↓</kbd> navegar &nbsp;·&nbsp; <kbd>↵</kbd> seleccionar &nbsp;·&nbsp; <kbd>esc</kbd> cerrar
-              </span>
+              <span class="hist-panel-title">{t(store.language, "history_panel_title")}</span>
+              <span class="hist-panel-hint">{t(store.language, "history_panel_hint")}</span>
             </div>
             <div class="hist-panel-list">
               <For each={[...cmdHistory()].reverse()}>
@@ -1082,7 +1147,7 @@ const WarpTerminal: Component<Props> = (props) => {
               <button
                 class="wib-git-branch"
                 classList={{ active: showBranchPanel() }}
-                title="Cambiar de rama"
+                title={t(store.language, "switch_branch_tip")}
                 onClick={openBranchSwitcher}
               >
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
@@ -1095,7 +1160,7 @@ const WarpTerminal: Component<Props> = (props) => {
               <button
                 class="wib-git-changes"
                 classList={{ active: store.gitPanelOpen }}
-                title="Ver cambios (Ctrl+Shift+G)"
+                title={t(store.language, "view_changes_tip")}
                 onClick={() => { setShowBranchPanel(false); setStore("gitPanelOpen", v => !v); }}
               >
                 ±{store.gitChangedCount}
@@ -1113,7 +1178,7 @@ const WarpTerminal: Component<Props> = (props) => {
                 value={cmdText()}
                 onInput={e => { setCmdText(e.currentTarget.value); setShowHistPanel(false); setShowTabPanel(false); setTabCompletions([]); }}
                 onKeyDown={handleKeyDown}
-                placeholder={ptyReady() ? "Run commands…" : "Connecting…"}
+                placeholder={ptyReady() ? t(store.language, "run_commands_ph") : t(store.language, "connecting_ph")}
                 disabled={!ptyReady()}
                 autocomplete="off"
                 spellcheck={false}

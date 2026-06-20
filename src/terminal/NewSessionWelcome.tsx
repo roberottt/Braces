@@ -36,8 +36,8 @@ const NewSessionWelcome: Component<Props> = (props) => {
         </div>
 
         <div class="nsw-title-block">
-          <div class="nsw-title">◈ NEW SESSION</div>
-          <div class="nsw-subtitle">Braces — AI-Native Terminal</div>
+          <div class="nsw-title">{t(store.language, "new_session_title")}</div>
+          <div class="nsw-subtitle">{t(store.language, "app_subtitle")}</div>
           <div class="nsw-cwd">
             <span class="nsw-cwd-icon">⬡</span>
             {shortCwd()}

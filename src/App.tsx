@@ -6,7 +6,6 @@ import StatusBar from "./hud/StatusBar";
 import AiSidePanel from "./hud/AiSidePanel";
 import ErrorPanel from "./hud/ErrorPanel";
 import MetricsOverlay from "./hud/MetricsOverlay";
-import FxOverlay from "./fx/FxOverlay";
 import OnboardingWizard from "./onboarding/OnboardingWizard";
 import SettingsModal from "./settings/SettingsModal";
 import TabSidebar from "./hud/TabSidebar";
@@ -14,14 +13,13 @@ import GitPanel from "./hud/GitPanel";
 import WorkspacePanel from "./hud/WorkspacePanel";
 import CodeReviewPanel from "./hud/CodeReviewPanel";
 import { store, setStore, genTabId } from "./store/terminalStore";
+import { initChats } from "./store/chatStore";
 import { t } from "./i18n";
 
 const FIRST_RUN_KEY = "braces_setup_done";
 
 const App: Component = () => {
   const [showOnboarding, setShowOnboarding] = createSignal(false);
-  const [glitch, setGlitch] = createSignal(false);
-
   // ── git status: refresh whenever cwd changes ─────────────────────────────
   const refreshGit = async (cwd: string) => {
     if (!cwd || cwd === "~") return;
@@ -63,7 +61,48 @@ const App: Component = () => {
     onCleanup(() => clearInterval(id));
   });
 
+  // ── Persist tabs to DB whenever they change (debounced 400 ms) ─────────────
+  let saveTabsTimer: ReturnType<typeof setTimeout> | undefined;
+  createEffect(() => {
+    if (!store.hydrated || !store.persistSessions) return;
+    const tabs = store.tabs.map((t) => ({ ...t }));
+    const activeTabId = store.activeTabId;
+    if (saveTabsTimer) clearTimeout(saveTabsTimer);
+    saveTabsTimer = setTimeout(() => {
+      invoke("db_save_tabs", { tabs, activeTabId }).catch((e) =>
+        console.error("[braces] db_save_tabs failed:", e)
+      );
+    }, 400);
+  });
+
   onMount(async () => {
+    // ── Hydrate tabs from DB (only when session persistence is enabled) ───────
+    try {
+      const result = store.persistSessions
+        ? await invoke<{
+            tabs: { id: string; title: string; cwd: string; lastExitCode: number | null }[];
+            activeTabId: string | null;
+          }>("db_load_tabs")
+        : { tabs: [], activeTabId: null };
+
+      if (result.tabs.length > 0) {
+        setStore("tabs", result.tabs);
+        const activeId = result.activeTabId;
+        const active =
+          (activeId && result.tabs.find((t) => t.id === activeId)) ||
+          result.tabs[0];
+        setStore("activeTabId", active.id);
+        setStore("cwd", active.cwd);
+        setStore("lastExitCode", active.lastExitCode);
+      }
+    } catch (e) {
+      console.error("[braces] tab hydration failed:", e);
+    }
+    setStore("hydrated", true);
+
+    // ── Hydrate chats from DB ──────────────────────────────────────────────
+    await initChats();
+
     if (!localStorage.getItem(FIRST_RUN_KEY)) {
       setShowOnboarding(true);
     }
@@ -80,14 +119,9 @@ const App: Component = () => {
                     ?? cfg.providers[cfg.ai.primary]?.model
                     ?? "";
       const theme    = localStorage.getItem("braces_theme")    ?? cfg.visual.theme;
-      const effects  = localStorage.getItem("braces_effects") !== null
-                    ? localStorage.getItem("braces_effects") === "true"
-                    : cfg.visual.effects;
-
       setStore("provider", provider);
       setStore("model", model);
       setStore("theme", theme);
-      setStore("effectsEnabled", effects);
       document.documentElement.setAttribute("data-theme", theme);
     } catch {
       const theme = localStorage.getItem("braces_theme");
@@ -95,8 +129,6 @@ const App: Component = () => {
         setStore("theme", theme);
         document.documentElement.setAttribute("data-theme", theme);
       }
-      const effects = localStorage.getItem("braces_effects");
-      if (effects !== null) setStore("effectsEnabled", effects === "true");
       const provider = localStorage.getItem("braces_provider");
       if (provider) setStore("provider", provider as any);
       const model = localStorage.getItem("braces_model");
@@ -133,6 +165,8 @@ const App: Component = () => {
             setStore("lastExitCode", next.lastExitCode);
           }
           setStore("tabs", remaining);
+          // Remove from persistent storage
+          invoke("db_delete_tab", { tabId: id }).catch(() => {});
         }
       }
       // Ctrl+Tab / Ctrl+Shift+Tab → cycle through tabs (forward / backward)
@@ -175,12 +209,6 @@ const App: Component = () => {
       if (w.__bracesAppKeyHandler === onKey) delete w.__bracesAppKeyHandler;
     });
 
-    setInterval(() => {
-      if (store.effectsEnabled && Math.random() < 0.25) {
-        setGlitch(true);
-        setTimeout(() => setGlitch(false), 80 + Math.random() * 150);
-      }
-    }, 45000);
   });
 
   const onOnboardingDone = () => {
@@ -189,7 +217,7 @@ const App: Component = () => {
   };
 
   return (
-    <div class={`app${glitch() ? " glitch" : ""}`} data-theme={store.theme}>
+    <div class="app" data-theme={store.theme}>
 
       <Show when={showOnboarding()}>
         <OnboardingWizard onDone={onOnboardingDone} />
@@ -209,31 +237,34 @@ const App: Component = () => {
         <Show when={!store.tabsSidebarOpen}>
           <button
             class="tab-sidebar-show-btn"
-            title="Mostrar sesiones [Ctrl+Alt+T]"
+            title={t(store.language, "show_sessions_tip")}
             onClick={() => setStore("tabsSidebarOpen", true)}
           >
             ›
           </button>
         </Show>
 
-        {/* Terminal area — all tabs mounted, only active visible */}
+        {/* Terminal area — all tabs mounted, only active visible.
+            Rendered only after DB hydration so PTYs are not spawned for seed tabs. */}
         <div class="terminal-area">
-          <For each={store.tabs}>
-            {(tab) => (
-              <div
-                class="tab-panel"
-                classList={{ hidden: tab.id !== store.activeTabId }}
-              >
-                <WarpTerminal tabId={tab.id} />
-                <Show when={tab.id === store.activeTabId}>
-                  <ErrorPanel />
-                  <Show when={store.historySearchOpen}>
-                    <HistoryOverlay />
+          <Show when={store.hydrated}>
+            <For each={store.tabs}>
+              {(tab) => (
+                <div
+                  class="tab-panel"
+                  classList={{ hidden: tab.id !== store.activeTabId }}
+                >
+                  <WarpTerminal tabId={tab.id} />
+                  <Show when={tab.id === store.activeTabId}>
+                    <ErrorPanel />
+                    <Show when={store.historySearchOpen}>
+                      <HistoryOverlay />
+                    </Show>
                   </Show>
-                </Show>
-              </div>
-            )}
-          </For>
+                </div>
+              )}
+            </For>
+          </Show>
         </div>
 
         <Show when={store.sidePanelOpen}>
@@ -255,7 +286,6 @@ const App: Component = () => {
         <SettingsModal />
       </Show>
 
-      <FxOverlay enabled={store.effectsEnabled} />
     </div>
   );
 };

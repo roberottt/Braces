@@ -69,7 +69,7 @@ const StatusBar: Component = () => {
         class="sb-item"
         style={{ cursor: "pointer", color: store.gitPanelOpen ? "var(--accent)" : undefined }}
         onClick={() => setStore("gitPanelOpen", (v) => !v)}
-        title="Control de código [Ctrl+Shift+G]"
+        title={t(store.language, "source_control_tip")}
       >
         ⎇
       </span>
@@ -85,7 +85,7 @@ const StatusBar: Component = () => {
         class="sb-item"
         style={{ cursor: "pointer", color: store.sidePanelOpen ? "var(--accent)" : undefined }}
         onClick={() => setStore("sidePanelOpen", (v) => !v)}
-        title="ANI panel [Ctrl+Shift+A]"
+        title={t(store.language, "ai_panel_tip")}
       >
         ANI
       </span>

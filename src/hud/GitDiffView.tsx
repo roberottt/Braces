@@ -1,6 +1,7 @@
 import { Component, For, Show, createEffect, createSignal } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { store } from "../store/terminalStore";
+import { t } from "../i18n";
 
 type GitDiffLine = {
   origin: string;
@@ -53,13 +54,13 @@ const GitDiffView: Component<Props> = (props) => {
   return (
     <div class="git-diff-scroll">
       <Show when={loading()}>
-        <div class="git-diff-empty">Cargando…</div>
+        <div class="git-diff-empty">{t(store.language, "loading")}</div>
       </Show>
       <Show when={!loading() && diff()?.isBinary}>
-        <div class="git-diff-binary">Archivo binario modificado</div>
+        <div class="git-diff-binary">{t(store.language, "binary_file")}</div>
       </Show>
       <Show when={!loading() && diff() && !diff()!.isBinary && diff()!.hunks.length === 0}>
-        <div class="git-diff-empty">Sin cambios para mostrar</div>
+        <div class="git-diff-empty">{t(store.language, "no_changes_diff")}</div>
       </Show>
       <For each={diff()?.hunks ?? []}>
         {(hunk) => (

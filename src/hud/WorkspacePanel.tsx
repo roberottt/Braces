@@ -118,8 +118,8 @@ const WorkspacePanel: Component = () => {
       {/* Header */}
       <div class="tab-sidebar-header">
         <div class="ws-dock-toggle">
-          <button class="ws-dock-btn" onClick={switchToSessions}>SESSIONS</button>
-          <button class="ws-dock-btn active">FILES</button>
+          <button class="ws-dock-btn" onClick={switchToSessions}>{t(store.language, "sessions")}</button>
+          <button class="ws-dock-btn active">{t(store.language, "files_label")}</button>
         </div>
         <div class="tab-sidebar-actions">
           <button class="tab-sidebar-btn" title={t(store.language, "refresh")} onClick={refresh}>↻</button>
@@ -145,7 +145,7 @@ const WorkspacePanel: Component = () => {
           </For>
         </Show>
         <Show when={!loading() && !tree()}>
-          <div class="git-empty-state">No se puede leer el directorio</div>
+          <div class="git-empty-state">{t(store.language, "no_read_dir")}</div>
         </Show>
       </div>
     </div>

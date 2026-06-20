@@ -10,8 +10,8 @@ const T = {
     tab_keys:              "API Keys",
     language:              "Language",
     theme:                 "Theme",
-    visual_effects:        "Visual effects",
-    visual_effects_desc:   "Scanlines, film grain, vignette and glitch",
+    persist_sessions:      "Session persistence",
+    persist_sessions_desc: "Save terminal history and restore it on restart",
     main_provider:         "Main provider",
     model:                 "Model",
     model_placeholder:     "model name",
@@ -56,6 +56,11 @@ const T = {
     // AI side panel
     provider_model_tip:    "Provider · active model",
     clear_chat:            "Clear chat",
+    new_chat:              "New chat",
+    chat_history:          "Chat history",
+    no_chats:              "No saved chats",
+    delete_chat:           "Delete chat",
+    untitled_chat:         "Chat",
     agent_empty:           "Agent mode — I can run commands, commit code, check git status, and more.",
     ai_input_ph:           "Ask or instruct…",
     ai_input_hint:         "↵ send · Shift+↵ newline",
@@ -99,6 +104,64 @@ const T = {
     shortcut_settings:     "settings",
     shortcut_metrics:      "system metrics",
     nsw_hint:              "Type a command to start",
+    new_session_title:     "◈ NEW SESSION",
+    app_subtitle:          "Braces — AI-Native Terminal",
+
+    // App
+    show_sessions_tip:     "Show sessions [Ctrl+Alt+T]",
+
+    // StatusBar
+    ai_panel_tip:          "AI panel [Ctrl+Shift+A]",
+
+    // AI side panel messages
+    msg_you:               "YOU",
+    msg_ai:                "AI",
+    exec_running:          "running…",
+
+    // Git panel
+    staged_badge:          "staged",
+    worktree_badge:        "worktree",
+    commit:                "Commit",
+    git_staged_section:    "Staged",
+    unstage_all:           "Unstage all",
+    stage_all:             "Stage all",
+    unstage:               "Unstage",
+    stage:                 "Stage",
+
+    // Code review
+    code_review_title:     "✓ Code Review",
+    review_worktree_btn:   "Review worktree",
+
+    // Workspace panel
+    no_read_dir:           "Cannot read directory",
+    sessions:              "SESSIONS",
+    files_label:           "FILES",
+
+    // Metrics overlay
+    system_label:          "SYSTEM",
+    ram_query_ph:          "what's eating my RAM?",
+
+    // History overlay
+    semantic_history:      "SEMANTIC HISTORY",
+    search_commands_ph:    "search commands…",
+
+    // Git diff view
+    binary_file:           "Binary file modified",
+    no_changes_diff:       "No changes to show",
+
+    // WarpTerminal panels
+    branches_panel:        "BRANCHES",
+    branch_hint:           "↵ switch  ·  esc close",
+    completions_panel:     "COMPLETIONS",
+    completions_hint:      "Tab / ↑↓ navigate · ↵ run · esc cancel",
+    history_panel_title:   "HISTORY",
+    history_panel_hint:    "↑↓ navigate · ↵ select · esc close",
+    switch_branch_tip:     "Switch branch",
+    view_changes_tip:      "View changes (Ctrl+Shift+G)",
+    run_commands_ph:       "Run commands…",
+    connecting_ph:         "Connecting…",
+    msg_claude_ph:         "Message Claude… (Shift+Enter for newline · ↑↓ Enter navigate menus)",
+    send_enter:            "Send (Enter)",
   },
   es: {
     // Settings modal
@@ -109,8 +172,8 @@ const T = {
     tab_keys:              "API Keys",
     language:              "Idioma",
     theme:                 "Tema",
-    visual_effects:        "Efectos visuales",
-    visual_effects_desc:   "Scanlines, grano de película, viñeta y glitch",
+    persist_sessions:      "Persistencia de sesiones",
+    persist_sessions_desc: "Guarda el historial de la terminal y lo restaura al reiniciar",
     main_provider:         "Proveedor principal",
     model:                 "Modelo",
     model_placeholder:     "nombre del modelo",
@@ -155,6 +218,11 @@ const T = {
     // AI side panel
     provider_model_tip:    "Proveedor · modelo activo",
     clear_chat:            "Borrar chat",
+    new_chat:              "Nuevo chat",
+    chat_history:          "Historial de chats",
+    no_chats:              "Sin chats guardados",
+    delete_chat:           "Eliminar chat",
+    untitled_chat:         "Chat",
     agent_empty:           "Modo agente — puedo ejecutar comandos, hacer commits, ver estado de git y más.",
     ai_input_ph:           "Pregunta o da instrucciones…",
     ai_input_hint:         "↵ enviar · Shift+↵ nueva línea",
@@ -198,6 +266,64 @@ const T = {
     shortcut_settings:     "configuración",
     shortcut_metrics:      "métricas del sistema",
     nsw_hint:              "Escribe un comando para comenzar",
+    new_session_title:     "◈ NUEVA SESIÓN",
+    app_subtitle:          "Braces — Terminal con IA nativa",
+
+    // App
+    show_sessions_tip:     "Mostrar sesiones [Ctrl+Alt+T]",
+
+    // StatusBar
+    ai_panel_tip:          "Panel de IA [Ctrl+Shift+A]",
+
+    // AI side panel messages
+    msg_you:               "TÚ",
+    msg_ai:                "IA",
+    exec_running:          "ejecutando…",
+
+    // Git panel
+    staged_badge:          "staged",
+    worktree_badge:        "worktree",
+    commit:                "Confirmar",
+    git_staged_section:    "En staging",
+    unstage_all:           "Quitar todo",
+    stage_all:             "Agregar todo",
+    unstage:               "Quitar",
+    stage:                 "Agregar",
+
+    // Code review
+    code_review_title:     "✓ Revisión de Código",
+    review_worktree_btn:   "Revisar worktree",
+
+    // Workspace panel
+    no_read_dir:           "No se puede leer el directorio",
+    sessions:              "SESIONES",
+    files_label:           "ARCHIVOS",
+
+    // Metrics overlay
+    system_label:          "SISTEMA",
+    ram_query_ph:          "¿qué consume mi RAM?",
+
+    // History overlay
+    semantic_history:      "HISTORIAL SEMÁNTICO",
+    search_commands_ph:    "buscar comandos…",
+
+    // Git diff view
+    binary_file:           "Archivo binario modificado",
+    no_changes_diff:       "Sin cambios para mostrar",
+
+    // WarpTerminal panels
+    branches_panel:        "RAMAS",
+    branch_hint:           "↵ cambiar  ·  esc cerrar",
+    completions_panel:     "COMPLETADOS",
+    completions_hint:      "Tab / ↑↓ navegar · ↵ ejecutar · esc cancelar",
+    history_panel_title:   "HISTORIAL",
+    history_panel_hint:    "↑↓ navegar · ↵ seleccionar · esc cerrar",
+    switch_branch_tip:     "Cambiar de rama",
+    view_changes_tip:      "Ver cambios (Ctrl+Shift+G)",
+    run_commands_ph:       "Ejecutar comandos…",
+    connecting_ph:         "Conectando…",
+    msg_claude_ph:         "Mensaje a Claude… (Shift+Intro nueva línea · ↑↓ Intro navegar menús)",
+    send_enter:            "Enviar (Intro)",
   },
 } as const;
 

@@ -2,12 +2,19 @@ import { Component, createSignal, For, Show, onMount } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { store, setStore } from "../store/terminalStore";
+import {
+  chatStore,
+  setChatStore,
+  newChat,
+  switchChat,
+  deleteChat,
+  persistActiveChat,
+  type Msg,
+  type UserMsg,
+  type AssistMsg,
+  type ExecMsg,
+} from "../store/chatStore";
 import { t } from "../i18n";
-
-type UserMsg   = { kind: "user";      content: string };
-type AssistMsg = { kind: "assistant"; content: string };
-type ExecMsg   = { kind: "exec";      cmd: string; out: string | null; ok: boolean | null };
-type Msg = UserMsg | AssistMsg | ExecMsg;
 
 /** Build ChatMessage history for the backend, embedding exec results into context. */
 function buildHistory(msgs: Msg[]): { role: string; content: string }[] {
@@ -39,8 +46,13 @@ function buildHistory(msgs: Msg[]): { role: string; content: string }[] {
   return result;
 }
 
+function formatDate(ms: number): string {
+  const d = new Date(ms);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
+    " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
 const AiSidePanel: Component = () => {
-  const [messages, setMessages] = createSignal<Msg[]>([]);
   const [query, setQuery] = createSignal("");
   const [streaming, setStreaming] = createSignal(false);
   let bottomRef: HTMLDivElement | undefined;
@@ -50,10 +62,10 @@ const AiSidePanel: Component = () => {
     requestAnimationFrame(() => bottomRef?.scrollIntoView({ behavior: "smooth" }));
 
   const ensureAssistantTail = () => {
-    setMessages((prev) => {
+    setChatStore("messages", (prev) => {
       const last = prev[prev.length - 1];
       if (last?.kind === "assistant") return prev;
-      return [...prev, { kind: "assistant", content: "" }];
+      return [...prev, { kind: "assistant" as const, content: "" }];
     });
   };
 
@@ -62,9 +74,9 @@ const AiSidePanel: Component = () => {
     if (!q || streaming()) return;
 
     // Snapshot history BEFORE appending the new user message
-    const history = buildHistory(messages());
+    const history = buildHistory(chatStore.messages);
 
-    setMessages((prev) => [...prev, { kind: "user", content: q }]);
+    setChatStore("messages", (prev) => [...prev, { kind: "user" as const, content: q }]);
     setQuery("");
     setStreaming(true);
     scrollBottom();
@@ -74,32 +86,31 @@ const AiSidePanel: Component = () => {
       const evt = ev.payload;
 
       if (evt.t === "token" && typeof evt.text === "string") {
-        setMessages((prev) => {
+        setChatStore("messages", (prev) => {
           const copy = [...prev];
           const last = copy[copy.length - 1];
           if (last?.kind === "assistant") {
             copy[copy.length - 1] = { ...last, content: last.content + (evt.text as string) };
           } else {
-            copy.push({ kind: "assistant", content: evt.text as string });
+            copy.push({ kind: "assistant" as const, content: evt.text as string });
           }
           return copy;
         });
         scrollBottom();
 
       } else if (evt.t === "new_block") {
-        // Start a fresh AI bubble after a sequence of exec blocks
-        setMessages((prev) => [...prev, { kind: "assistant", content: "" }]);
+        setChatStore("messages", (prev) => [...prev, { kind: "assistant" as const, content: "" }]);
         scrollBottom();
 
       } else if (evt.t === "exec_start" && typeof evt.cmd === "string") {
-        setMessages((prev) => [
+        setChatStore("messages", (prev) => [
           ...prev,
-          { kind: "exec", cmd: evt.cmd as string, out: null, ok: null },
+          { kind: "exec" as const, cmd: evt.cmd as string, out: null, ok: null },
         ]);
         scrollBottom();
 
       } else if (evt.t === "exec_done" && typeof evt.cmd === "string") {
-        setMessages((prev) => {
+        setChatStore("messages", (prev) => {
           const copy = [...prev];
           for (let i = copy.length - 1; i >= 0; i--) {
             const m = copy[i];
@@ -136,34 +147,36 @@ const AiSidePanel: Component = () => {
         activeTabId: store.activeTabId,
       });
     } catch (e) {
-      setMessages((prev) => {
+      setChatStore("messages", (prev) => {
         const copy = [...prev];
         const last = copy[copy.length - 1];
         if (last?.kind === "assistant" && last.content === "") {
           copy[copy.length - 1] = { ...last, content: `Error: ${e}` };
           return copy;
         }
-        return [...prev, { kind: "assistant", content: `Error: ${e}` }];
+        return [...prev, { kind: "assistant" as const, content: `Error: ${e}` }];
       });
     } finally {
       unlisten();
       setStreaming(false);
       scrollBottom();
+      // Persist to DB after each completed exchange
+      await persistActiveChat();
     }
   };
 
   const analyzeError = async () => {
     if (streaming()) return;
     setStreaming(true);
-    setMessages((prev) => [
+    setChatStore("messages", (prev) => [
       ...prev,
-      { kind: "user", content: "Analyze the last terminal error and suggest a fix." },
-      { kind: "assistant", content: "" },
+      { kind: "user" as const, content: "Analyze the last terminal error and suggest a fix." },
+      { kind: "assistant" as const, content: "" },
     ]);
     scrollBottom();
 
     const unlisten = await listen<string>("ai-analysis-token", (ev) => {
-      setMessages((prev) => {
+      setChatStore("messages", (prev) => {
         const copy = [...prev];
         const last = copy[copy.length - 1];
         if (last?.kind === "assistant") {
@@ -179,7 +192,7 @@ const AiSidePanel: Component = () => {
         activeTabId: store.activeTabId,
       });
       if (result) {
-        setMessages((prev) => {
+        setChatStore("messages", (prev) => {
           const copy = [...prev];
           const last = copy[copy.length - 1];
           if (last?.kind === "assistant" && last.content.length < result.length) {
@@ -189,7 +202,7 @@ const AiSidePanel: Component = () => {
         });
       }
     } catch (e) {
-      setMessages((prev) => {
+      setChatStore("messages", (prev) => {
         const copy = [...prev];
         const last = copy[copy.length - 1];
         if (last?.kind === "assistant") {
@@ -201,11 +214,12 @@ const AiSidePanel: Component = () => {
       unlisten();
       setStreaming(false);
       scrollBottom();
+      await persistActiveChat();
     }
   };
 
   const applyFix = () => {
-    const allContent = messages()
+    const allContent = chatStore.messages
       .filter((m): m is AssistMsg => m.kind === "assistant")
       .map((m) => m.content)
       .join("\n");
@@ -216,12 +230,12 @@ const AiSidePanel: Component = () => {
     }
   };
 
-  const clearChat = () => setMessages([]);
+  const clearChat = () => setChatStore("messages", []);
 
   onMount(() => inputRef?.focus());
 
   const isStreaming = () => streaming();
-  const isLastMsg = (idx: () => number) => idx() === messages().length - 1;
+  const isLastMsg = (idx: () => number) => idx() === chatStore.messages.length - 1;
 
   return (
     <div class="side-panel">
@@ -230,6 +244,7 @@ const AiSidePanel: Component = () => {
         <span class="hc-bl" />
       </div>
 
+      {/* ── Header ── */}
       <div class="sp-header">
         <span class="sp-model" title={t(store.language, "provider_model_tip")}>
           {store.provider}{store.model ? ` · ${store.model}` : ""}
@@ -240,11 +255,22 @@ const AiSidePanel: Component = () => {
           <button class="sp-header-btn" title={t(store.language, "analyze")} onClick={analyzeError} disabled={streaming()}>
             ▲
           </button>
-          <Show when={messages().some(m => m.kind === "assistant" && m.content.includes("FIX:"))}>
+          <Show when={chatStore.messages.some(m => m.kind === "assistant" && (m as AssistMsg).content.includes("FIX:"))}>
             <button class="sp-header-btn" title={t(store.language, "apply_fix_hint")} onClick={applyFix}>
               ⚡
             </button>
           </Show>
+          <button class="sp-header-btn" title={t(store.language, "new_chat")} onClick={newChat} disabled={streaming()}>
+            ＋
+          </button>
+          <button
+            class="sp-header-btn"
+            classList={{ active: chatStore.historyOpen }}
+            title={t(store.language, "chat_history")}
+            onClick={() => setChatStore("historyOpen", v => !v)}
+          >
+            ☰
+          </button>
           <button class="sp-header-btn" title={t(store.language, "clear_chat")} onClick={clearChat}>
             ⌫
           </button>
@@ -258,9 +284,41 @@ const AiSidePanel: Component = () => {
         </div>
       </div>
 
+      {/* ── History overlay ── */}
+      <Show when={chatStore.historyOpen}>
+        <div class="sp-history">
+          <div class="sp-history-title">{t(store.language, "chat_history")}</div>
+          <Show
+            when={chatStore.chats.length > 0}
+            fallback={<div class="sp-history-empty">{t(store.language, "no_chats")}</div>}
+          >
+            <For each={chatStore.chats}>
+              {(chat) => (
+                <div
+                  class="sp-history-item"
+                  classList={{ active: chat.id === chatStore.activeChatId }}
+                  onClick={() => switchChat(chat.id)}
+                >
+                  <div class="sp-history-item-title">{chat.title || t(store.language, "untitled_chat")}</div>
+                  <div class="sp-history-item-date">{formatDate(chat.updatedAt)}</div>
+                  <button
+                    class="sp-history-item-del"
+                    title={t(store.language, "delete_chat")}
+                    onClick={(e) => { e.stopPropagation(); deleteChat(chat.id); }}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+            </For>
+          </Show>
+        </div>
+      </Show>
+
+      {/* ── Messages ── */}
       <div class="sp-messages">
         <For
-          each={messages()}
+          each={chatStore.messages}
           fallback={
             <div class="sp-empty">
               {t(store.language, "agent_empty")}
@@ -271,7 +329,7 @@ const AiSidePanel: Component = () => {
             <>
               <Show when={msg.kind === "user"}>
                 <div class="sp-msg sp-msg-user">
-                  <div class="sp-msg-label">YOU</div>
+                  <div class="sp-msg-label">{t(store.language, "msg_you")}</div>
                   <div class="sp-msg-body">{(msg as UserMsg).content}</div>
                 </div>
               </Show>
@@ -279,7 +337,7 @@ const AiSidePanel: Component = () => {
               <Show when={msg.kind === "assistant"}>
                 <div class="sp-msg sp-msg-assistant">
                   <div class="sp-msg-label">
-                    AI
+                    {t(store.language, "msg_ai")}
                     <Show when={isStreaming() && isLastMsg(idx)}>
                       <span class="sp-cursor">▌</span>
                     </Show>
@@ -304,7 +362,7 @@ const AiSidePanel: Component = () => {
                   </div>
                   <Show when={(msg as ExecMsg).out === null}>
                     <div class="sp-exec-running">
-                      <span class="sp-exec-spin">⟳</span> running…
+                      <span class="sp-exec-spin">⟳</span> {t(store.language, "exec_running")}
                     </div>
                   </Show>
                   <Show when={(msg as ExecMsg).out !== null}>
@@ -318,6 +376,7 @@ const AiSidePanel: Component = () => {
         <div ref={bottomRef} />
       </div>
 
+      {/* ── Composer ── */}
       <div class="sp-composer">
         <div class="sp-composer-box">
           <textarea

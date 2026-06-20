@@ -17,10 +17,11 @@ pub fn pty_spawn(
     tab_id: String,
     cols: u16,
     rows: u16,
+    cwd: Option<String>,
     state: State<'_, PtyState>,
 ) -> Result<(), String> {
     let output = Arc::new(OutputBuffer::new(500));
-    let session = PtySession::spawn(app, tab_id.clone(), cols, rows, output)
+    let session = PtySession::spawn(app, tab_id.clone(), cols, rows, output, cwd)
         .map_err(|e| e.to_string())?;
     state.0.lock().unwrap().insert(tab_id, session);
     Ok(())

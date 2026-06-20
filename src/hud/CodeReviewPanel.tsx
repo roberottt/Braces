@@ -127,7 +127,7 @@ const CodeReviewPanel: Component = () => {
       <div class="hud-corners"><span class="hc-br" /><span class="hc-bl" /></div>
 
       <div class="sp-header">
-        <span class="sp-title">✓ Code Review</span>
+        <span class="sp-title">{t(store.language, "code_review_title")}</span>
         <div class="sp-header-actions">
           <button class="sp-header-btn close" title={t(store.language, "close")}
             onClick={() => setStore("codeReviewOpen", false)}>✕</button>
@@ -154,7 +154,7 @@ const CodeReviewPanel: Component = () => {
         >
           <span class="review-btn-icon">⊘</span>
           <span class="review-btn-label">
-            Review worktree
+            {t(store.language, "review_worktree_btn")}
             <span class="review-btn-sub">{t(store.language, "review_worktree_sub")}</span>
           </span>
         </button>
