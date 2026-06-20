@@ -21,7 +21,6 @@ export type TerminalStore = {
   persistSessions: boolean;
   sidePanelOpen: boolean;
   metricsOpen: boolean;
-  effectsEnabled: boolean;
   theme: string;
   // Error intelligence
   errorPanelOpen: boolean;
@@ -65,7 +64,6 @@ export const [store, setStore] = createStore<TerminalStore>({
   persistSessions: (localStorage.getItem("braces_persist_sessions") ?? "true") !== "false",
   sidePanelOpen: false,
   metricsOpen: false,
-  effectsEnabled: true,
   theme: "neon-noir",
   errorPanelOpen: false,
   errorAnalysis: "",

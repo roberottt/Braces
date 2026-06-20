@@ -66,12 +66,6 @@ const SettingsModal: Component = () => {
     localStorage.setItem("braces_theme", id);
   };
 
-  const toggleEffects = () => {
-    const next = !store.effectsEnabled;
-    setStore("effectsEnabled", next);
-    localStorage.setItem("braces_effects", String(next));
-  };
-
   const togglePersistSessions = () => {
     const next = !store.persistSessions;
     setStore("persistSessions", next);
@@ -168,17 +162,6 @@ const SettingsModal: Component = () => {
                   </button>
                 ))}
               </div>
-            </div>
-
-            {/* Visual effects */}
-            <div class="sfield sfield-row">
-              <div>
-                <label class="slabel">{tr("visual_effects")}</label>
-                <p class="sdesc">{tr("visual_effects_desc")}</p>
-              </div>
-              <button class={`stoggle${store.effectsEnabled ? " on" : ""}`} onClick={toggleEffects}>
-                {store.effectsEnabled ? tr("on") : tr("off")}
-              </button>
             </div>
 
             {/* Session persistence */}

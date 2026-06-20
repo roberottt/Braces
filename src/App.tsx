@@ -6,7 +6,6 @@ import StatusBar from "./hud/StatusBar";
 import AiSidePanel from "./hud/AiSidePanel";
 import ErrorPanel from "./hud/ErrorPanel";
 import MetricsOverlay from "./hud/MetricsOverlay";
-import FxOverlay from "./fx/FxOverlay";
 import OnboardingWizard from "./onboarding/OnboardingWizard";
 import SettingsModal from "./settings/SettingsModal";
 import TabSidebar from "./hud/TabSidebar";
@@ -21,8 +20,6 @@ const FIRST_RUN_KEY = "braces_setup_done";
 
 const App: Component = () => {
   const [showOnboarding, setShowOnboarding] = createSignal(false);
-  const [glitch, setGlitch] = createSignal(false);
-
   // ── git status: refresh whenever cwd changes ─────────────────────────────
   const refreshGit = async (cwd: string) => {
     if (!cwd || cwd === "~") return;
@@ -122,14 +119,9 @@ const App: Component = () => {
                     ?? cfg.providers[cfg.ai.primary]?.model
                     ?? "";
       const theme    = localStorage.getItem("braces_theme")    ?? cfg.visual.theme;
-      const effects  = localStorage.getItem("braces_effects") !== null
-                    ? localStorage.getItem("braces_effects") === "true"
-                    : cfg.visual.effects;
-
       setStore("provider", provider);
       setStore("model", model);
       setStore("theme", theme);
-      setStore("effectsEnabled", effects);
       document.documentElement.setAttribute("data-theme", theme);
     } catch {
       const theme = localStorage.getItem("braces_theme");
@@ -137,8 +129,6 @@ const App: Component = () => {
         setStore("theme", theme);
         document.documentElement.setAttribute("data-theme", theme);
       }
-      const effects = localStorage.getItem("braces_effects");
-      if (effects !== null) setStore("effectsEnabled", effects === "true");
       const provider = localStorage.getItem("braces_provider");
       if (provider) setStore("provider", provider as any);
       const model = localStorage.getItem("braces_model");
@@ -219,12 +209,6 @@ const App: Component = () => {
       if (w.__bracesAppKeyHandler === onKey) delete w.__bracesAppKeyHandler;
     });
 
-    setInterval(() => {
-      if (store.effectsEnabled && Math.random() < 0.25) {
-        setGlitch(true);
-        setTimeout(() => setGlitch(false), 80 + Math.random() * 150);
-      }
-    }, 45000);
   });
 
   const onOnboardingDone = () => {
@@ -233,7 +217,7 @@ const App: Component = () => {
   };
 
   return (
-    <div class={`app${glitch() ? " glitch" : ""}`} data-theme={store.theme}>
+    <div class="app" data-theme={store.theme}>
 
       <Show when={showOnboarding()}>
         <OnboardingWizard onDone={onOnboardingDone} />
@@ -302,7 +286,6 @@ const App: Component = () => {
         <SettingsModal />
       </Show>
 
-      <FxOverlay enabled={store.effectsEnabled} />
     </div>
   );
 };
