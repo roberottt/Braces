@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { store, setStore } from "../store/terminalStore";
+import { t } from "../i18n";
 import { getShellInitScript } from "./shellInit";
 import { ansiChunkToHtml, mkAnsiState, type AnsiState } from "./ansiToHtml";
 import NewSessionWelcome from "./NewSessionWelcome";
@@ -1023,10 +1024,10 @@ const WarpTerminal: Component<Props> = (props) => {
                 if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitClaudeMessage(); }
               }}
               onPaste={handleClaudePaste}
-              placeholder="Message Claude… (Shift+Enter for newline · ↑↓ Enter navigate menus)"
+              placeholder={t(store.language, "msg_claude_ph")}
               rows={1}
             />
-            <button class="claude-send-btn" title="Send (Enter)" onClick={submitClaudeMessage}>↵</button>
+            <button class="claude-send-btn" title={t(store.language, "send_enter")} onClick={submitClaudeMessage}>↵</button>
           </div>
         </div>
       </Show>
@@ -1037,8 +1038,8 @@ const WarpTerminal: Component<Props> = (props) => {
         <Show when={showBranchPanel() && branches().length > 0}>
           <div class="branch-panel">
             <div class="branch-panel-header">
-              <span class="branch-panel-title">RAMAS</span>
-              <span class="branch-panel-hint"><kbd>↵</kbd> cambiar &nbsp;·&nbsp; <kbd>esc</kbd> cerrar</span>
+              <span class="branch-panel-title">{t(store.language, "branches_panel")}</span>
+              <span class="branch-panel-hint">{t(store.language, "branch_hint")}</span>
               <button class="branch-panel-close" onClick={() => setShowBranchPanel(false)}>✕</button>
             </div>
             <div class="branch-panel-list">
@@ -1068,10 +1069,8 @@ const WarpTerminal: Component<Props> = (props) => {
         <Show when={showTabPanel() && tabCompletions().length > 0}>
           <div class="tab-comp-panel" ref={tabPanelRef}>
             <div class="tab-comp-header">
-              <span class="tab-comp-title">COMPLETIONS</span>
-              <span class="tab-comp-hint">
-                <kbd>Tab</kbd> / <kbd>↑↓</kbd> navegar &nbsp;·&nbsp; <kbd>↵</kbd> ejecutar &nbsp;·&nbsp; <kbd>esc</kbd> cancelar
-              </span>
+              <span class="tab-comp-title">{t(store.language, "completions_panel")}</span>
+              <span class="tab-comp-hint">{t(store.language, "completions_hint")}</span>
             </div>
             <div class="tab-comp-list">
               <For each={tabCompletions()}>
@@ -1099,10 +1098,8 @@ const WarpTerminal: Component<Props> = (props) => {
         <Show when={showHistPanel() && cmdHistory().length > 0}>
           <div class="hist-panel" ref={histPanelRef}>
             <div class="hist-panel-header">
-              <span class="hist-panel-title">HISTORY</span>
-              <span class="hist-panel-hint">
-                <kbd>↑↓</kbd> navegar &nbsp;·&nbsp; <kbd>↵</kbd> seleccionar &nbsp;·&nbsp; <kbd>esc</kbd> cerrar
-              </span>
+              <span class="hist-panel-title">{t(store.language, "history_panel_title")}</span>
+              <span class="hist-panel-hint">{t(store.language, "history_panel_hint")}</span>
             </div>
             <div class="hist-panel-list">
               <For each={[...cmdHistory()].reverse()}>
@@ -1150,7 +1147,7 @@ const WarpTerminal: Component<Props> = (props) => {
               <button
                 class="wib-git-branch"
                 classList={{ active: showBranchPanel() }}
-                title="Cambiar de rama"
+                title={t(store.language, "switch_branch_tip")}
                 onClick={openBranchSwitcher}
               >
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
@@ -1163,7 +1160,7 @@ const WarpTerminal: Component<Props> = (props) => {
               <button
                 class="wib-git-changes"
                 classList={{ active: store.gitPanelOpen }}
-                title="Ver cambios (Ctrl+Shift+G)"
+                title={t(store.language, "view_changes_tip")}
                 onClick={() => { setShowBranchPanel(false); setStore("gitPanelOpen", v => !v); }}
               >
                 ±{store.gitChangedCount}
@@ -1181,7 +1178,7 @@ const WarpTerminal: Component<Props> = (props) => {
                 value={cmdText()}
                 onInput={e => { setCmdText(e.currentTarget.value); setShowHistPanel(false); setShowTabPanel(false); setTabCompletions([]); }}
                 onKeyDown={handleKeyDown}
-                placeholder={ptyReady() ? "Run commands…" : "Connecting…"}
+                placeholder={ptyReady() ? t(store.language, "run_commands_ph") : t(store.language, "connecting_ph")}
                 disabled={!ptyReady()}
                 autocomplete="off"
                 spellcheck={false}

@@ -186,11 +186,11 @@ const TabSidebar: Component = () => {
       {/* Header */}
       <div class="tab-sidebar-header">
         <div class="ws-dock-toggle">
-          <button class="ws-dock-btn active">SESSIONS</button>
+          <button class="ws-dock-btn active">{t(store.language, "sessions")}</button>
           <button class="ws-dock-btn"
             title={t(store.language, "file_explorer_tip")}
             onClick={() => { setStore("leftDockView", "files"); setStore("workspaceOpen", true); }}
-          >FILES</button>
+          >{t(store.language, "files_label")}</button>
         </div>
         <div class="tab-sidebar-actions">
           <button class="tab-sidebar-btn" title={t(store.language, "new_session_tip")} onClick={newTab}>+</button>

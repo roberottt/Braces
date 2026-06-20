@@ -329,7 +329,7 @@ const AiSidePanel: Component = () => {
             <>
               <Show when={msg.kind === "user"}>
                 <div class="sp-msg sp-msg-user">
-                  <div class="sp-msg-label">YOU</div>
+                  <div class="sp-msg-label">{t(store.language, "msg_you")}</div>
                   <div class="sp-msg-body">{(msg as UserMsg).content}</div>
                 </div>
               </Show>
@@ -337,7 +337,7 @@ const AiSidePanel: Component = () => {
               <Show when={msg.kind === "assistant"}>
                 <div class="sp-msg sp-msg-assistant">
                   <div class="sp-msg-label">
-                    AI
+                    {t(store.language, "msg_ai")}
                     <Show when={isStreaming() && isLastMsg(idx)}>
                       <span class="sp-cursor">▌</span>
                     </Show>
@@ -362,7 +362,7 @@ const AiSidePanel: Component = () => {
                   </div>
                   <Show when={(msg as ExecMsg).out === null}>
                     <div class="sp-exec-running">
-                      <span class="sp-exec-spin">⟳</span> running…
+                      <span class="sp-exec-spin">⟳</span> {t(store.language, "exec_running")}
                     </div>
                   </Show>
                   <Show when={(msg as ExecMsg).out !== null}>

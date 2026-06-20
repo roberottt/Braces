@@ -253,7 +253,7 @@ const App: Component = () => {
         <Show when={!store.tabsSidebarOpen}>
           <button
             class="tab-sidebar-show-btn"
-            title="Mostrar sesiones [Ctrl+Alt+T]"
+            title={t(store.language, "show_sessions_tip")}
             onClick={() => setStore("tabsSidebarOpen", true)}
           >
             ›

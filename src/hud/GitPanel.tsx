@@ -169,7 +169,7 @@ const GitPanel: Component = () => {
                 {basename(store.gitSelectedFile!)}
               </span>
               <span class={`git-diff-file-badge ${store.gitSelectedStaged ? "staged" : "worktree"}`}>
-                {store.gitSelectedStaged ? "staged" : "worktree"}
+                {store.gitSelectedStaged ? t(store.language, "staged_badge") : t(store.language, "worktree_badge")}
               </span>
               <button class="sp-header-btn close" style={{ "font-size": "10px" }}
                 title={t(store.language, "close_diff")}
@@ -195,7 +195,7 @@ const GitPanel: Component = () => {
                 disabled={!commitMsg().trim() || stagedFiles().length === 0 || working()}
                 onClick={commit}
               >
-                {working() ? t(store.language, "committing") : `Commit${stagedFiles().length > 0 ? ` (${stagedFiles().length})` : ""}`}
+                {working() ? t(store.language, "committing") : `${t(store.language, "commit")}${stagedFiles().length > 0 ? ` (${stagedFiles().length})` : ""}`}
               </button>
             </div>
           </div>
@@ -204,10 +204,10 @@ const GitPanel: Component = () => {
           <Show when={stagedFiles().length > 0}>
             <div class="git-section staged">
               <div class="git-section-header">
-                <span class="git-section-title">Staged</span>
+                <span class="git-section-title">{t(store.language, "git_staged_section")}</span>
                 <span class="git-section-count">{stagedFiles().length}</span>
-                <button class="git-section-btn" title="Unstage all" onClick={unstageAll}>
-                  Unstage all
+                <button class="git-section-btn" title={t(store.language, "unstage_all")} onClick={unstageAll}>
+                  {t(store.language, "unstage_all")}
                 </button>
               </div>
               <For each={stagedFiles()}>
@@ -227,7 +227,7 @@ const GitPanel: Component = () => {
                       </Show>
                     </div>
                     <div class="git-file-actions">
-                      <button class="git-file-btn unstage" title="Unstage"
+                      <button class="git-file-btn unstage" title={t(store.language, "unstage")}
                         onClick={e => { e.stopPropagation(); unstage(file.path); }}>−</button>
                       <button class="git-file-btn discard" title={t(store.language, "discard")}
                         onClick={e => { e.stopPropagation(); requestDiscard(file.path, false); }}>✕</button>
@@ -244,8 +244,8 @@ const GitPanel: Component = () => {
               <div class="git-section-header">
                 <span class="git-section-title">{t(store.language, "changes")}</span>
                 <span class="git-section-count">{changedFiles().length}</span>
-                <button class="git-section-btn" title="Stage all" onClick={stageAll}>
-                  Stage all
+                <button class="git-section-btn" title={t(store.language, "stage_all")} onClick={stageAll}>
+                  {t(store.language, "stage_all")}
                 </button>
               </div>
               <For each={changedFiles()}>
@@ -268,9 +268,9 @@ const GitPanel: Component = () => {
                         </Show>
                       </div>
                       <div class="git-file-actions">
-                        <button class="git-file-btn stage" title="Stage"
+                        <button class="git-file-btn stage" title={t(store.language, "stage")}
                           onClick={e => { e.stopPropagation(); stage(file.path); }}>+</button>
-                        <button class="git-file-btn discard" title="Descartar"
+                        <button class="git-file-btn discard" title={t(store.language, "discard")}
                           onClick={e => { e.stopPropagation(); requestDiscard(file.path, isUntracked()); }}>✕</button>
                       </div>
                     </div>
