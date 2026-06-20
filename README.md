@@ -149,16 +149,22 @@ Five accent-color themes (the background stays pure black — `#000` — always)
 | Time Warp | Amber `#c08840` |
 | Minimal | Light gray `#cccccc` |
 
-### Visual effects
+### Session persistence
 
-An optional FX overlay adds atmosphere without hurting readability:
+Terminal sessions and AI chat history are persisted to a SQLite database at `%APPDATA%\braces\braces.db` and restored automatically on the next launch:
 
-- **Scanlines** — subtle horizontal lines over the entire window
-- **Vignette** — soft dark edge shadow
-- **Film grain** — LCG noise rendered on a Canvas at ~20 fps, very low alpha
-- **Glitch** — random brief CSS glitch animation triggered every ~45 seconds
+- **Terminal tabs** — command blocks and CWD are saved; on restart they appear as read-only history with a fresh shell starting in the saved directory
+- **AI chats** — full conversation history is written to the DB; closing the panel no longer loses the conversation
+- **Tab close** (`Ctrl+W` or sidebar ×) deletes the tab's data from the DB
+- Enable or disable persistence in **Settings → Appearance → Session persistence**
 
-Toggle effects in Settings → Appearance or disable entirely for a clean look.
+### Multi-chat AI panel
+
+The AI side panel now supports multiple independent conversations:
+
+- **`+` button** — creates a new chat
+- **`☰` button** — opens chat history to browse, reopen, or delete previous conversations
+- Chats are persisted to SQLite and restored across restarts
 
 ### System metrics overlay (`Ctrl+Shift+M`)
 
@@ -184,7 +190,7 @@ The UI supports **Spanish** (default) and **English**. Switch language from the 
 
 Three tabs:
 
-- **Appearance** — theme picker, visual effects toggle, language selector
+- **Appearance** — theme picker, session persistence toggle, language selector
 - **AI** — provider, model, custom host for local backends, autocomplete toggle
 - **Keys** — encrypted API key entry for Anthropic, OpenAI, xAI, Gemini
 
@@ -221,8 +227,6 @@ Three tabs:
 terminal/
 ├── src/                        # SolidJS frontend
 │   ├── App.tsx                 # Root — layout, shortcuts, git polling
-│   ├── store/
-│   │   └── terminalStore.ts    # Global reactive store (SolidJS store)
 │   ├── terminal/
 │   │   ├── WarpTerminal.tsx    # Block renderer + PTY client + input bar
 │   │   ├── HistoryOverlay.tsx  # Ctrl+R search overlay
@@ -236,8 +240,6 @@ terminal/
 │   │   ├── CodeReviewPanel.tsx # AI code review
 │   │   ├── ErrorPanel.tsx      # Error analysis bar
 │   │   └── MetricsOverlay.tsx  # CPU/memory overlay
-│   ├── fx/
-│   │   └── FxOverlay.tsx       # Scanlines, vignette, film grain
 │   ├── settings/
 │   │   └── SettingsModal.tsx   # Theme / AI / keys settings
 │   ├── onboarding/
@@ -245,12 +247,17 @@ terminal/
 │   ├── ai/
 │   │   ├── autocomplete.ts     # Frontend AI autocomplete helpers
 │   │   └── nlShell.ts          # Natural-language shell helpers
+│   ├── store/
+│   │   ├── terminalStore.ts    # Global reactive store (SolidJS store)
+│   │   └── chatStore.ts        # Global AI chat store (multi-chat, persisted)
 │   └── i18n.ts                 # ES / EN strings
 │
 └── src-tauri/                  # Rust backend
     └── src/
         ├── lib.rs              # Tauri app setup + command registry
         ├── pty/                # PTY session management (portable-pty)
+        ├── db/
+        │   └── mod.rs          # SQLite layer — session + chat persistence
         ├── ai/
         │   ├── router.rs       # AIProvider trait + provider dispatch
         │   ├── agent.rs        # Agentic loop (tool execution)
@@ -306,6 +313,7 @@ cargo test                                       # run unit tests
 On first launch the onboarding wizard configures the essentials. Settings are persisted to `localStorage` and the app's config directory:
 
 - **Config file**: `%APPDATA%\braces\config.toml` (Windows) — AI provider defaults, visual settings
+- **Session database**: `%APPDATA%\braces\braces.db` — SQLite database for terminal sessions, command blocks, and AI chat history
 - **Context store**: `%APPDATA%\braces\context.json` — RAG / semantic history index
 - **API keys**: OS keychain (never on disk in plain text)
 - **UI preferences**: `localStorage` (theme, language, provider, model, history)

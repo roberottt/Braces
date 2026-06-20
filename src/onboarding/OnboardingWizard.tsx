@@ -15,6 +15,13 @@ const OnboardingWizard: Component<Props> = (props) => {
   const [provider, setProvider] = createSignal<ProviderName>("ollama");
   const [apiKey, setApiKey] = createSignal("");
   const [host, setHost] = createSignal("http://localhost:11434");
+  const THEMES = [
+    { id: "neon-noir",      label: "Anakin" },
+    { id: "akira",          label: "Mace Windu" },
+    { id: "ghost-protocol", label: "Yoda" },
+    { id: "time-warp",      label: "C-3PO" },
+    { id: "minimal",        label: "Stormtrooper" },
+  ];
   const [theme, setTheme] = createSignal("neon-noir");
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
@@ -122,15 +129,15 @@ const OnboardingWizard: Component<Props> = (props) => {
           <div class="ow-field">
             <label class="ow-label">THEME</label>
             <div class="ow-provider-grid">
-              {["neon-noir", "akira", "ghost-protocol", "time-warp", "minimal"].map((t) => (
+              {THEMES.map(({ id, label }) => (
                 <button
-                  class={`ow-provider-btn${theme() === t ? " selected" : ""}`}
+                  class={`ow-provider-btn${theme() === id ? " selected" : ""}`}
                   onClick={() => {
-                    setTheme(t);
-                    document.documentElement.setAttribute("data-theme", t);
+                    setTheme(id);
+                    document.documentElement.setAttribute("data-theme", id);
                   }}
                 >
-                  {t}
+                  {label}
                 </button>
               ))}
             </div>
@@ -142,7 +149,7 @@ const OnboardingWizard: Component<Props> = (props) => {
         <Show when={step() === 2}>
           <div style={{ color: "var(--fg-mid)", "font-size": "13px", "line-height": "1.8" }}>
             <div><span style={{ color: "var(--accent)" }}>Provider:</span> {provider()}</div>
-            <div><span style={{ color: "var(--accent)" }}>Theme:</span> {theme()}</div>
+            <div><span style={{ color: "var(--accent)" }}>Theme:</span> {THEMES.find(t => t.id === theme())?.label ?? theme()}</div>
           </div>
           <p style={{ "margin-top": "16px", "font-size": "11px", color: "var(--fg-dim)" }}>
             API keys are encrypted with AES-256-GCM and stored in the OS keychain.
