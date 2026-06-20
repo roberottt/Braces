@@ -163,18 +163,26 @@ const WarpTerminal: Component<Props> = (props) => {
   const [claudeImages, setClaudeImages] = createSignal<ClaudeImage[]>([]);
   const [blocks, setBlocks] = createSignal<CommandBlock[]>([]);
 
-  // Safety-net: persist done blocks to DB whenever the blocks signal changes.
-  // Complements the save inside closeBlock so blocks survive unexpected app closure.
+  // Persist blocks to SQLite. Saves ALL blocks with a command — NOT just the ones
+  // marked done. Some shells never emit the prompt marker that fires closeBlock(),
+  // so filtering on `done` left those sessions with an empty blocks table. On
+  // restore every loaded block is forced done (its PTY is gone) so it renders as a
+  // finished history card.
+  const persistBlocks = () => {
+    const all = blocks().filter((b) => b.cmd);
+    invoke("db_save_blocks", { tabId: props.tabId, blocks: all }).catch((e) =>
+      console.error("[braces] db_save_blocks failed:", e)
+    );
+  };
+
+  // Safety-net: debounced save whenever the blocks signal changes (covers streaming
+  // output and unexpected app closure before a block formally completes).
   let saveBlocksTimer: ReturnType<typeof setTimeout> | undefined;
   createEffect(() => {
-    const doneBlocks = blocks().filter((b) => b.done);
-    if (doneBlocks.length === 0) return;
+    const all = blocks();
+    if (all.length === 0) return;
     if (saveBlocksTimer) clearTimeout(saveBlocksTimer);
-    saveBlocksTimer = setTimeout(() => {
-      invoke("db_save_blocks", { tabId: props.tabId, blocks: doneBlocks }).catch((e) =>
-        console.error("[braces] db_save_blocks (effect) failed:", e)
-      );
-    }, 800);
+    saveBlocksTimer = setTimeout(persistBlocks, 500);
   });
 
   const isClaudeSession = () =>
@@ -311,11 +319,8 @@ const WarpTerminal: Component<Props> = (props) => {
     setTabExitCode(exitCode);
     activeBlockId = "";
     activeAnsiState = mkAnsiState();
-    // Persist all completed blocks to SQLite (errors surface in the console)
-    const doneBlocks = blocks().filter(b => b.done);
-    invoke("db_save_blocks", { tabId: props.tabId, blocks: doneBlocks }).catch((e) =>
-      console.error("[braces] db_save_blocks failed:", e)
-    );
+    // Persist blocks to SQLite (errors surface in the console)
+    persistBlocks();
     // Always fire git-refresh after every command completion so the branch pill
     // and change counter update even when the exit code doesn't change value.
     const cwd = tabCwd();
@@ -862,7 +867,9 @@ const WarpTerminal: Component<Props> = (props) => {
       const savedBlocks = await invoke<CommandBlock[]>("db_load_blocks", { tabId: props.tabId });
       console.debug("[braces] db_load_blocks", props.tabId, "→", savedBlocks.length, "blocks");
       if (savedBlocks.length > 0) {
-        setBlocks(savedBlocks);
+        // The PTY these blocks belonged to is gone — render them as finished
+        // history cards (any block left mid-run when the app closed shows as done).
+        setBlocks(savedBlocks.map((b) => ({ ...b, done: true })));
         isRestoredTab = true;
       }
     } catch (e) {
@@ -903,6 +910,9 @@ const WarpTerminal: Component<Props> = (props) => {
     }
 
     onCleanup(() => {
+      // Final flush so anything not yet caught by the debounce is persisted.
+      if (saveBlocksTimer) clearTimeout(saveBlocksTimer);
+      persistBlocks();
       unlistenPty();
       unlistenAnalysis();
       ro.disconnect();
