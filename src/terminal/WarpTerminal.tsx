@@ -67,6 +67,13 @@ const COMMAND_WRAPPERS = new Set([
 // Interactive programs get the real window height via enterInteractive().
 const BLOCK_ROWS = 2000;
 
+// Git sub-commands that can change HEAD / the branch / the working-tree status.
+// When one is run we can't rely on the prompt-redraw OSC marker firing promptly
+// (it often doesn't after `git switch`/`checkout -b`), so we proactively kick a
+// short burst of git-refresh events instead of waiting for the 2 s poll.
+const GIT_MUTATING_RE =
+  /^\s*git\s+(?:-[^\s]+\s+)*(checkout|switch|branch|reset|merge|rebase|pull|fetch|stash|commit|cherry-pick|revert|restore|clone|init|tag|am|apply)\b/i;
+
 const baseName = (s: string): string =>
   (s.toLowerCase().replace(/\.(exe|cmd|bat|ps1|com)$/, "").split(/[\\/]/).pop() || s);
 
@@ -428,6 +435,21 @@ const WarpTerminal: Component<Props> = (props) => {
       setTabTitle(raw.length > 40 ? raw.slice(0, 40) + "…" : raw);
       invoke("history_add", { command: raw }).catch(() => {});
       trackCdCommand(raw);
+
+      // Branch/ref-changing git command → refresh the branch pill + change counter
+      // without waiting for the 2 s poll. Fired as a short staggered burst because
+      // we don't know exactly when the command finishes; the retries also ride out
+      // any brief .git/index.lock contention right after the command exits.
+      if (GIT_MUTATING_RE.test(raw)) {
+        const cwd = tabCwd();
+        if (cwd && cwd !== "~") {
+          for (const ms of [350, 900, 1800]) {
+            setTimeout(() => window.dispatchEvent(
+              new CustomEvent("braces:git-refresh", { detail: { cwd } })
+            ), ms);
+          }
+        }
+      }
 
       // Known interactive program → take over the terminal immediately. A block is
       // created so the command appears in the history after the session ends, but it
@@ -1167,7 +1189,10 @@ const WarpTerminal: Component<Props> = (props) => {
                 title={t(store.language, "view_changes_tip")}
                 onClick={() => { setShowBranchPanel(false); setStore("gitPanelOpen", v => !v); }}
               >
-                ±{store.gitChangedCount}
+                <Show when={store.gitInsertions > 0 || store.gitDeletions > 0} fallback={<span class="wib-git-clean">✓</span>}>
+                  <span class="wib-git-ins">+{store.gitInsertions}</span>
+                  <span class="wib-git-del">−{store.gitDeletions}</span>
+                </Show>
               </button>
             </Show>
           </div>

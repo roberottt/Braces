@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use super::{
-    run_git, parse_porcelain_v2, parse_unified_diff,
+    run_git, parse_porcelain_v2, parse_unified_diff, sum_numstat,
     GitBranchInfo, GitFileDiff, GitRepoInfo, GitStatus, GitStatusKind, GitTreeNode,
 };
 
@@ -83,7 +83,11 @@ pub async fn git_is_repo(cwd: String) -> Result<GitRepoInfo, String> {
 /// If `cwd` is not inside a repo, returns a `GitStatus` with `isRepo: false`.
 #[tauri::command]
 pub async fn git_status(cwd: String) -> Result<GitStatus, String> {
-    match run_git(&cwd, &["status", "--porcelain=v2", "--branch"]).await {
+    // `--untracked-files=all` lists every new file individually. Without it git
+    // collapses an untracked directory into a single entry, so a freshly-added
+    // folder of N files showed up as "1" change. .gitignore is still respected,
+    // so ignored trees (node_modules, target, …) are not counted.
+    match run_git(&cwd, &["status", "--porcelain=v2", "--branch", "--untracked-files=all"]).await {
         Err(e) => {
             // git writes "not a git repository" to stderr when outside a repo
             if e.to_lowercase().contains("not a git repo")
@@ -96,13 +100,26 @@ pub async fn git_status(cwd: String) -> Result<GitStatus, String> {
                     ahead: 0,
                     behind: 0,
                     detached: false,
+                    insertions: 0,
+                    deletions: 0,
                     files: vec![],
                 })
             } else {
                 Err(e)
             }
         }
-        Ok(raw) => Ok(parse_porcelain_v2(&raw)),
+        Ok(raw) => {
+            let mut status = parse_porcelain_v2(&raw);
+            // Line-level diff stat = unstaged + staged tracked changes. Two calls so
+            // it also works in a repo with no commits yet (where `git diff HEAD` fails).
+            let unstaged = run_git(&cwd, &["diff", "--numstat"]).await.unwrap_or_default();
+            let staged   = run_git(&cwd, &["diff", "--cached", "--numstat"]).await.unwrap_or_default();
+            let (a1, d1) = sum_numstat(&unstaged);
+            let (a2, d2) = sum_numstat(&staged);
+            status.insertions = a1 + a2;
+            status.deletions  = d1 + d2;
+            Ok(status)
+        }
     }
 }
 
@@ -199,8 +216,10 @@ pub async fn git_branch_info(cwd: String) -> Result<GitBranchInfo, String> {
 /// Return the full project file tree with per-file git status badges.
 #[tauri::command]
 pub async fn git_file_tree(cwd: String) -> Result<GitTreeNode, String> {
-    // Build a path→status map from `git status --porcelain`
-    let raw = run_git(&cwd, &["status", "--porcelain"]).await.unwrap_or_default();
+    // Build a path→status map from `git status --porcelain`. `-uall` so files
+    // inside a new untracked directory each get a status badge (git otherwise
+    // collapses them into a single directory entry).
+    let raw = run_git(&cwd, &["status", "--porcelain", "--untracked-files=all"]).await.unwrap_or_default();
     let mut status_map: HashMap<String, GitStatusKind> = HashMap::new();
 
     for line in raw.lines() {

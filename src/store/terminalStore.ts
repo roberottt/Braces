@@ -46,6 +46,8 @@ export type TerminalStore = {
   gitAhead: number;
   gitBehind: number;
   gitChangedCount: number;
+  gitInsertions: number;
+  gitDeletions: number;
   gitSelectedFile: string | null;
   gitSelectedStaged: boolean;
 };
@@ -85,6 +87,8 @@ export const [store, setStore] = createStore<TerminalStore>({
   gitAhead: 0,
   gitBehind: 0,
   gitChangedCount: 0,
+  gitInsertions: 0,
+  gitDeletions: 0,
   gitSelectedFile: null,
   gitSelectedStaged: false,
 });

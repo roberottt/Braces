@@ -687,6 +687,13 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 .wib-git-changes { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+.wib-git-ins   { color: var(--accent-lime); }
+.wib-git-del   { color: var(--accent-red); }
+.wib-git-clean { color: var(--fg-mid); }
+/* Inherit the accent colour when the button is active (panel open) */
+.wib-git-changes.active .wib-git-ins,
+.wib-git-changes.active .wib-git-del,
+.wib-git-changes.active .wib-git-clean { color: inherit; }
 
 /* ── Branch switcher panel ──────────────────────────────────────────────── */
 .branch-panel {
