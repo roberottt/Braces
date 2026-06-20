@@ -6,7 +6,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { store, setStore } from "../store/terminalStore";
 import { t } from "../i18n";
 import { getShellInitScript } from "./shellInit";
-import { ansiChunkToHtml, mkAnsiState, type AnsiState } from "./ansiToHtml";
+import { TermScreen, mkScreen } from "./ansiToHtml";
 import NewSessionWelcome from "./NewSessionWelcome";
 import "@xterm/xterm/css/xterm.css";
 
@@ -277,7 +277,11 @@ const WarpTerminal: Component<Props> = (props) => {
   let ptyReadyRef = false;
   let echoFilter = "";
   let activeBlockId = "";
-  let activeAnsiState: AnsiState = mkAnsiState();
+  // Virtual screen for the active block. The PTY stream is applied to this grid
+  // (cursor motion, in-place redraws, line/screen erase) and the whole block is
+  // re-rendered from it on every chunk — so progress bars / spinners overwrite in
+  // place instead of stacking blank lines.
+  let activeScreen: TermScreen = mkScreen();
   let titleBuf = "";
   let interactiveStartedAt = 0;
   let lastPtyCols = 0;
@@ -299,12 +303,11 @@ const WarpTerminal: Component<Props> = (props) => {
 
   const appendOutput = (text: string) => {
     if (!activeBlockId) return;
-    const { html, state } = ansiChunkToHtml(text, activeAnsiState);
-    activeAnsiState = state;
-    if (!html) return;
+    activeScreen.write(text);
+    const html = activeScreen.toHtml();
     const id = activeBlockId;
     setBlocks(prev => prev.map(b =>
-      b.id === id ? { ...b, htmlOutput: b.htmlOutput + html } : b
+      b.id === id ? { ...b, htmlOutput: html } : b
     ));
     scrollToBottom();
   };
@@ -321,7 +324,7 @@ const WarpTerminal: Component<Props> = (props) => {
     }));
     setTabExitCode(exitCode);
     activeBlockId = "";
-    activeAnsiState = mkAnsiState();
+    activeScreen = mkScreen();
     // Persist blocks to SQLite (errors surface in the console)
     persistBlocks();
     // Always fire git-refresh after every command completion so the branch pill
@@ -443,7 +446,7 @@ const WarpTerminal: Component<Props> = (props) => {
         };
         setBlocks(prev => [...prev, iblock]);
         activeBlockId = iblock.id;
-        activeAnsiState = mkAnsiState();
+        activeScreen = mkScreen();
         scrollToBottom();
         setInteractiveCmd(raw);
         enterInteractive();
@@ -463,7 +466,7 @@ const WarpTerminal: Component<Props> = (props) => {
       };
       setBlocks(prev => [...prev, block]);
       activeBlockId = block.id;
-      activeAnsiState = mkAnsiState();
+      activeScreen = mkScreen();
       scrollToBottom();
     }
     sendRaw((raw || "") + "\r");
@@ -632,7 +635,7 @@ const WarpTerminal: Component<Props> = (props) => {
           e.preventDefault();
           setBlocks([]);
           activeBlockId = "";
-          activeAnsiState = mkAnsiState();
+          activeScreen = mkScreen();
           // Clear persisted blocks for this tab too
           invoke("db_save_blocks", { tabId: props.tabId, blocks: [] }).catch(() => {});
         }
