@@ -890,8 +890,9 @@ const WarpTerminal: Component<Props> = (props) => {
       setPtyReady(true);
 
       const homeDir: string = await invoke("pty_home_dir");
-      // Only reset cwd to home for brand-new tabs; restored tabs keep their saved cwd
-      if (!isRestoredTab) setTabCwd(homeDir);
+      // Reset cwd to home only for tabs with no specific directory; restored tabs and
+      // tabs opened in a real directory (e.g. via Ctrl+Alt+T) keep their saved cwd.
+      if (!isRestoredTab && tabCwd() === "~") setTabCwd(homeDir);
 
       const shellType: string = await invoke("pty_shell_type", { tabId: props.tabId });
       const init = getShellInitScript(shellType);
