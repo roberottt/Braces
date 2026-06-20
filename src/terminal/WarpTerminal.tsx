@@ -297,6 +297,9 @@ const WarpTerminal: Component<Props> = (props) => {
     setTabExitCode(exitCode);
     activeBlockId = "";
     activeAnsiState = mkAnsiState();
+    // Persist all completed blocks to SQLite
+    const doneBlocks = blocks().filter(b => b.done);
+    invoke("db_save_blocks", { tabId: props.tabId, blocks: doneBlocks }).catch(() => {});
     // Always fire git-refresh after every command completion so the branch pill
     // and change counter update even when the exit code doesn't change value.
     const cwd = tabCwd();
@@ -606,6 +609,8 @@ const WarpTerminal: Component<Props> = (props) => {
           setBlocks([]);
           activeBlockId = "";
           activeAnsiState = mkAnsiState();
+          // Clear persisted blocks for this tab too
+          invoke("db_save_blocks", { tabId: props.tabId, blocks: [] }).catch(() => {});
         }
         return;
     }
@@ -834,15 +839,32 @@ const WarpTerminal: Component<Props> = (props) => {
 
     const cols = Math.max(term.cols, 80);
     const rows = BLOCK_ROWS;
+
+    // ── Restore blocks saved from the previous session ───────────────────
+    let isRestoredTab = false;
     try {
-      await invoke("pty_spawn", { tabId: props.tabId, cols, rows });
+      const savedBlocks = await invoke<CommandBlock[]>("db_load_blocks", { tabId: props.tabId });
+      if (savedBlocks.length > 0) {
+        setBlocks(savedBlocks);
+        isRestoredTab = true;
+      }
+    } catch (e) {
+      console.error("[braces] db_load_blocks failed:", e);
+    }
+
+    try {
+      // Pass the saved cwd so the new shell starts in the right directory
+      const savedCwd = tabCwd();
+      const cwd = savedCwd && savedCwd !== "~" ? savedCwd : undefined;
+      await invoke("pty_spawn", { tabId: props.tabId, cols, rows, cwd });
       lastPtyCols = cols;
       lastPtyRows = rows;
       ptyReadyRef = true;
       setPtyReady(true);
 
       const homeDir: string = await invoke("pty_home_dir");
-      setTabCwd(homeDir);
+      // Only reset cwd to home for brand-new tabs; restored tabs keep their saved cwd
+      if (!isRestoredTab) setTabCwd(homeDir);
 
       const shellType: string = await invoke("pty_shell_type", { tabId: props.tabId });
       const init = getShellInitScript(shellType);

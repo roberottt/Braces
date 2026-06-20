@@ -15,6 +15,8 @@ export type TerminalStore = {
   lastExitCode: number | null;
   provider: Provider;
   model: string;
+  /** True once tabs have been loaded from the DB (or confirmed empty). */
+  hydrated: boolean;
   sidePanelOpen: boolean;
   metricsOpen: boolean;
   effectsEnabled: boolean;
@@ -57,6 +59,7 @@ export const [store, setStore] = createStore<TerminalStore>({
   lastExitCode: null,
   provider: "ollama",
   model: "llama3.2",
+  hydrated: false,
   sidePanelOpen: false,
   metricsOpen: false,
   effectsEnabled: true,

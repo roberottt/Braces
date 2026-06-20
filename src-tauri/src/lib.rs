@@ -1,6 +1,7 @@
 pub mod ai;
 pub mod config;
 pub mod context;
+pub mod db;
 pub mod git;
 pub mod metrics;
 pub mod pty;
@@ -36,6 +37,12 @@ pub fn run() {
                 .join("context.json");
             app.manage(context::ContextStore::load(store_path));
 
+            let db_path = dirs_next::config_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join("braces")
+                .join("braces.db");
+            app.manage(db::Db::open(db_path));
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -69,6 +76,19 @@ pub fn run() {
             ai::commands::get_metrics,
             // Shell completion
             commands::shell_complete,
+            // DB persistence
+            db::db_load_tabs,
+            db::db_save_tabs,
+            db::db_delete_tab,
+            db::db_load_blocks,
+            db::db_save_blocks,
+            db::db_list_chats,
+            db::db_load_chat,
+            db::db_save_chat,
+            db::db_create_chat,
+            db::db_delete_chat,
+            db::db_get_active_chat,
+            db::db_set_active_chat,
             // Git
             git::commands::git_is_repo,
             git::commands::git_status,

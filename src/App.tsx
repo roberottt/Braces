@@ -14,6 +14,7 @@ import GitPanel from "./hud/GitPanel";
 import WorkspacePanel from "./hud/WorkspacePanel";
 import CodeReviewPanel from "./hud/CodeReviewPanel";
 import { store, setStore, genTabId } from "./store/terminalStore";
+import { initChats } from "./store/chatStore";
 import { t } from "./i18n";
 
 const FIRST_RUN_KEY = "braces_setup_done";
@@ -63,7 +64,46 @@ const App: Component = () => {
     onCleanup(() => clearInterval(id));
   });
 
+  // ── Persist tabs to DB whenever they change (debounced 400 ms) ─────────────
+  let saveTabsTimer: ReturnType<typeof setTimeout> | undefined;
+  createEffect(() => {
+    if (!store.hydrated) return; // Only after hydration to avoid overwriting the DB with seed state
+    const tabs = store.tabs.map((t) => ({ ...t }));
+    const activeTabId = store.activeTabId;
+    if (saveTabsTimer) clearTimeout(saveTabsTimer);
+    saveTabsTimer = setTimeout(() => {
+      invoke("db_save_tabs", { tabs, activeTabId }).catch((e) =>
+        console.error("[braces] db_save_tabs failed:", e)
+      );
+    }, 400);
+  });
+
   onMount(async () => {
+    // ── Hydrate tabs from DB ───────────────────────────────────────────────
+    try {
+      const result = await invoke<{
+        tabs: { id: string; title: string; cwd: string; lastExitCode: number | null }[];
+        activeTabId: string | null;
+      }>("db_load_tabs");
+
+      if (result.tabs.length > 0) {
+        setStore("tabs", result.tabs);
+        const activeId = result.activeTabId;
+        const active =
+          (activeId && result.tabs.find((t) => t.id === activeId)) ||
+          result.tabs[0];
+        setStore("activeTabId", active.id);
+        setStore("cwd", active.cwd);
+        setStore("lastExitCode", active.lastExitCode);
+      }
+    } catch (e) {
+      console.error("[braces] tab hydration failed:", e);
+    }
+    setStore("hydrated", true);
+
+    // ── Hydrate chats from DB ──────────────────────────────────────────────
+    await initChats();
+
     if (!localStorage.getItem(FIRST_RUN_KEY)) {
       setShowOnboarding(true);
     }
@@ -133,6 +173,8 @@ const App: Component = () => {
             setStore("lastExitCode", next.lastExitCode);
           }
           setStore("tabs", remaining);
+          // Remove from persistent storage
+          invoke("db_delete_tab", { tabId: id }).catch(() => {});
         }
       }
       // Ctrl+Tab / Ctrl+Shift+Tab → cycle through tabs (forward / backward)
@@ -216,24 +258,27 @@ const App: Component = () => {
           </button>
         </Show>
 
-        {/* Terminal area — all tabs mounted, only active visible */}
+        {/* Terminal area — all tabs mounted, only active visible.
+            Rendered only after DB hydration so PTYs are not spawned for seed tabs. */}
         <div class="terminal-area">
-          <For each={store.tabs}>
-            {(tab) => (
-              <div
-                class="tab-panel"
-                classList={{ hidden: tab.id !== store.activeTabId }}
-              >
-                <WarpTerminal tabId={tab.id} />
-                <Show when={tab.id === store.activeTabId}>
-                  <ErrorPanel />
-                  <Show when={store.historySearchOpen}>
-                    <HistoryOverlay />
+          <Show when={store.hydrated}>
+            <For each={store.tabs}>
+              {(tab) => (
+                <div
+                  class="tab-panel"
+                  classList={{ hidden: tab.id !== store.activeTabId }}
+                >
+                  <WarpTerminal tabId={tab.id} />
+                  <Show when={tab.id === store.activeTabId}>
+                    <ErrorPanel />
+                    <Show when={store.historySearchOpen}>
+                      <HistoryOverlay />
+                    </Show>
                   </Show>
-                </Show>
-              </div>
-            )}
-          </For>
+                </div>
+              )}
+            </For>
+          </Show>
         </div>
 
         <Show when={store.sidePanelOpen}>

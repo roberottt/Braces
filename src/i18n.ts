@@ -56,6 +56,11 @@ const T = {
     // AI side panel
     provider_model_tip:    "Provider · active model",
     clear_chat:            "Clear chat",
+    new_chat:              "New chat",
+    chat_history:          "Chat history",
+    no_chats:              "No saved chats",
+    delete_chat:           "Delete chat",
+    untitled_chat:         "Chat",
     agent_empty:           "Agent mode — I can run commands, commit code, check git status, and more.",
     ai_input_ph:           "Ask or instruct…",
     ai_input_hint:         "↵ send · Shift+↵ newline",
@@ -155,6 +160,11 @@ const T = {
     // AI side panel
     provider_model_tip:    "Proveedor · modelo activo",
     clear_chat:            "Borrar chat",
+    new_chat:              "Nuevo chat",
+    chat_history:          "Historial de chats",
+    no_chats:              "Sin chats guardados",
+    delete_chat:           "Eliminar chat",
+    untitled_chat:         "Chat",
     agent_empty:           "Modo agente — puedo ejecutar comandos, hacer commits, ver estado de git y más.",
     ai_input_ph:           "Pregunta o da instrucciones…",
     ai_input_hint:         "↵ enviar · Shift+↵ nueva línea",

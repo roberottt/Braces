@@ -1,4 +1,5 @@
 import { Component, For, Show, createSignal } from "solid-js";
+import { invoke } from "@tauri-apps/api/core";
 import { store, setStore, genTabId, type Tab } from "../store/terminalStore";
 import { t } from "../i18n";
 
@@ -48,6 +49,10 @@ const TabSidebar: Component = () => {
       if (next) { setStore("activeTabId", next.id); setStore("cwd", next.cwd); setStore("lastExitCode", next.lastExitCode); }
     }
     setStore("tabs", remaining);
+    // Remove the tab and its blocks from persistent storage
+    invoke("db_delete_tab", { tabId: id }).catch((err) =>
+      console.error("[braces] db_delete_tab failed:", err)
+    );
   };
 
   const activateTab = (tab: Tab) => {
