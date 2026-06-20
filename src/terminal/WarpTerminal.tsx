@@ -6,7 +6,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { store, setStore } from "../store/terminalStore";
 import { t } from "../i18n";
 import { getShellInitScript } from "./shellInit";
-import { ansiChunkToHtml, mkAnsiState, type AnsiState } from "./ansiToHtml";
+import { TermScreen, mkScreen } from "./ansiToHtml";
 import NewSessionWelcome from "./NewSessionWelcome";
 import "@xterm/xterm/css/xterm.css";
 
@@ -66,6 +66,13 @@ const COMMAND_WRAPPERS = new Set([
 // block renderer can't follow — which truncated long listings and left gaps.
 // Interactive programs get the real window height via enterInteractive().
 const BLOCK_ROWS = 2000;
+
+// Git sub-commands that can change HEAD / the branch / the working-tree status.
+// When one is run we can't rely on the prompt-redraw OSC marker firing promptly
+// (it often doesn't after `git switch`/`checkout -b`), so we proactively kick a
+// short burst of git-refresh events instead of waiting for the 2 s poll.
+const GIT_MUTATING_RE =
+  /^\s*git\s+(?:-[^\s]+\s+)*(checkout|switch|branch|reset|merge|rebase|pull|fetch|stash|commit|cherry-pick|revert|restore|clone|init|tag|am|apply)\b/i;
 
 const baseName = (s: string): string =>
   (s.toLowerCase().replace(/\.(exe|cmd|bat|ps1|com)$/, "").split(/[\\/]/).pop() || s);
@@ -277,7 +284,11 @@ const WarpTerminal: Component<Props> = (props) => {
   let ptyReadyRef = false;
   let echoFilter = "";
   let activeBlockId = "";
-  let activeAnsiState: AnsiState = mkAnsiState();
+  // Virtual screen for the active block. The PTY stream is applied to this grid
+  // (cursor motion, in-place redraws, line/screen erase) and the whole block is
+  // re-rendered from it on every chunk — so progress bars / spinners overwrite in
+  // place instead of stacking blank lines.
+  let activeScreen: TermScreen = mkScreen();
   let titleBuf = "";
   let interactiveStartedAt = 0;
   let lastPtyCols = 0;
@@ -299,12 +310,11 @@ const WarpTerminal: Component<Props> = (props) => {
 
   const appendOutput = (text: string) => {
     if (!activeBlockId) return;
-    const { html, state } = ansiChunkToHtml(text, activeAnsiState);
-    activeAnsiState = state;
-    if (!html) return;
+    activeScreen.write(text);
+    const html = activeScreen.toHtml();
     const id = activeBlockId;
     setBlocks(prev => prev.map(b =>
-      b.id === id ? { ...b, htmlOutput: b.htmlOutput + html } : b
+      b.id === id ? { ...b, htmlOutput: html } : b
     ));
     scrollToBottom();
   };
@@ -321,7 +331,7 @@ const WarpTerminal: Component<Props> = (props) => {
     }));
     setTabExitCode(exitCode);
     activeBlockId = "";
-    activeAnsiState = mkAnsiState();
+    activeScreen = mkScreen();
     // Persist blocks to SQLite (errors surface in the console)
     persistBlocks();
     // Always fire git-refresh after every command completion so the branch pill
@@ -426,6 +436,21 @@ const WarpTerminal: Component<Props> = (props) => {
       invoke("history_add", { command: raw }).catch(() => {});
       trackCdCommand(raw);
 
+      // Branch/ref-changing git command → refresh the branch pill + change counter
+      // without waiting for the 2 s poll. Fired as a short staggered burst because
+      // we don't know exactly when the command finishes; the retries also ride out
+      // any brief .git/index.lock contention right after the command exits.
+      if (GIT_MUTATING_RE.test(raw)) {
+        const cwd = tabCwd();
+        if (cwd && cwd !== "~") {
+          for (const ms of [350, 900, 1800]) {
+            setTimeout(() => window.dispatchEvent(
+              new CustomEvent("braces:git-refresh", { detail: { cwd } })
+            ), ms);
+          }
+        }
+      }
+
       // Known interactive program → take over the terminal immediately. A block is
       // created so the command appears in the history after the session ends, but it
       // has no captured output (the live UI isn't text we can replay).
@@ -443,7 +468,7 @@ const WarpTerminal: Component<Props> = (props) => {
         };
         setBlocks(prev => [...prev, iblock]);
         activeBlockId = iblock.id;
-        activeAnsiState = mkAnsiState();
+        activeScreen = mkScreen();
         scrollToBottom();
         setInteractiveCmd(raw);
         enterInteractive();
@@ -463,7 +488,7 @@ const WarpTerminal: Component<Props> = (props) => {
       };
       setBlocks(prev => [...prev, block]);
       activeBlockId = block.id;
-      activeAnsiState = mkAnsiState();
+      activeScreen = mkScreen();
       scrollToBottom();
     }
     sendRaw((raw || "") + "\r");
@@ -632,7 +657,7 @@ const WarpTerminal: Component<Props> = (props) => {
           e.preventDefault();
           setBlocks([]);
           activeBlockId = "";
-          activeAnsiState = mkAnsiState();
+          activeScreen = mkScreen();
           // Clear persisted blocks for this tab too
           invoke("db_save_blocks", { tabId: props.tabId, blocks: [] }).catch(() => {});
         }
@@ -890,8 +915,9 @@ const WarpTerminal: Component<Props> = (props) => {
       setPtyReady(true);
 
       const homeDir: string = await invoke("pty_home_dir");
-      // Only reset cwd to home for brand-new tabs; restored tabs keep their saved cwd
-      if (!isRestoredTab) setTabCwd(homeDir);
+      // Reset cwd to home only for tabs with no specific directory; restored tabs and
+      // tabs opened in a real directory (e.g. via Ctrl+Alt+T) keep their saved cwd.
+      if (!isRestoredTab && tabCwd() === "~") setTabCwd(homeDir);
 
       const shellType: string = await invoke("pty_shell_type", { tabId: props.tabId });
       const init = getShellInitScript(shellType);
@@ -1163,7 +1189,10 @@ const WarpTerminal: Component<Props> = (props) => {
                 title={t(store.language, "view_changes_tip")}
                 onClick={() => { setShowBranchPanel(false); setStore("gitPanelOpen", v => !v); }}
               >
-                ±{store.gitChangedCount}
+                <Show when={store.gitInsertions > 0 || store.gitDeletions > 0} fallback={<span class="wib-git-clean">✓</span>}>
+                  <span class="wib-git-ins">+{store.gitInsertions}</span>
+                  <span class="wib-git-del">−{store.gitDeletions}</span>
+                </Show>
               </button>
             </Show>
           </div>

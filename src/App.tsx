@@ -27,6 +27,7 @@ const App: Component = () => {
       const status = await invoke<{
         isRepo: boolean; branch: string;
         ahead: number; behind: number;
+        insertions: number; deletions: number;
         files: unknown[];
       }>("git_status", { cwd });
       setStore("gitIsRepo",       status.isRepo);
@@ -34,6 +35,8 @@ const App: Component = () => {
       setStore("gitAhead",        status.ahead   ?? 0);
       setStore("gitBehind",       status.behind  ?? 0);
       setStore("gitChangedCount", status.isRepo ? (status.files?.length ?? 0) : 0);
+      setStore("gitInsertions",   status.isRepo ? (status.insertions ?? 0) : 0);
+      setStore("gitDeletions",    status.isRepo ? (status.deletions  ?? 0) : 0);
     } catch { /* git not available or non-repo — ignore */ }
   };
 

@@ -37,6 +37,10 @@ pub struct GitStatus {
     pub ahead: u32,
     pub behind: u32,
     pub detached: bool,
+    /// Total lines added across staged + unstaged tracked changes (diff numstat).
+    pub insertions: u32,
+    /// Total lines removed across staged + unstaged tracked changes.
+    pub deletions: u32,
     pub files: Vec<GitFileStatus>,
 }
 
@@ -207,7 +211,22 @@ pub fn parse_porcelain_v2(raw: &str) -> GitStatus {
         }
     }
 
-    GitStatus { is_repo: true, branch, upstream, ahead, behind, detached, files }
+    GitStatus { is_repo: true, branch, upstream, ahead, behind, detached, insertions: 0, deletions: 0, files }
+}
+
+/// Sum added/removed line counts from `git diff --numstat` output.
+/// Binary files report "-\t-" and are skipped.
+pub fn sum_numstat(raw: &str) -> (u32, u32) {
+    let mut added = 0u32;
+    let mut removed = 0u32;
+    for line in raw.lines() {
+        let mut cols = line.split('\t');
+        let a = cols.next().unwrap_or("");
+        let d = cols.next().unwrap_or("");
+        added   += a.parse::<u32>().unwrap_or(0);
+        removed += d.parse::<u32>().unwrap_or(0);
+    }
+    (added, removed)
 }
 
 // ─── unified diff parser ─────────────────────────────────────────────────────

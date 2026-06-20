@@ -75,123 +75,223 @@ function toCSS(s: AnsiState): string {
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-/**
- * Convert a chunk of ANSI text to HTML, preserving SGR style state across calls.
- *
- * Cursor-movement sequences that ConPTY emits instead of plain newlines are
- * converted to <br> so block-rendered output stays readable:
- *   \x1b[B / \x1b[nB  CUD cursor-down       → n <br>
- *   \x1b[E / \x1b[nE  CNL cursor-next-line   → n <br>
- *   \x1b[H / \x1b[r;cH CUP cursor-position   → <br> × (newRow − currentRow) when row advances
- *
- * A lone \r (without \n) is treated as a carriage-return: it discards the
- * current visual line and lets the next text overwrite from the left, matching
- * real-terminal behaviour (progress lines, etc.).
- */
-export function ansiChunkToHtml(raw: string, state: AnsiState): { html: string; state: AnsiState } {
-  let html = '';
-  let buf  = '';
-  let lineStart = 0; // index into html where the current visual line began
-  let row = 1;       // current virtual row (1-based), used for CUP tracking
-  const s  = { ...state };
+// ── Virtual screen model ─────────────────────────────────────────────────────
+// Block output used to be rendered append-only: the ANSI stream was turned into a
+// string of HTML that only ever grew. That breaks any program which redraws in
+// place — progress bars, spinners, multi-line build status (cargo, vite, pnpm,
+// npm…). Those move the cursor up and rewrite lines (\x1b[nA + \x1b[K), which the
+// old renderer couldn't represent, so every refresh stacked blank lines instead of
+// overwriting the previous frame.
+//
+// TermScreen is a minimal terminal grid: a list of lines, each a list of styled
+// cells, plus a cursor. It applies cursor motion, line/screen erase and SGR just
+// like a real terminal, then renders the resulting grid to HTML. In-place redraws
+// now overwrite cleanly, exactly as they look in a normal terminal.
 
-  const flush = () => {
-    if (!buf) return;
-    const c = toCSS(s);
-    html += c ? `<span style="${c}">${esc(buf)}</span>` : esc(buf);
-    buf = '';
-  };
+type Cell = { ch: string; css: string };
+const BLANK: Cell = { ch: ' ', css: '' };
 
-  const emitBr = (n = 1) => {
-    flush();
-    for (let x = 0; x < n; x++) { html += '<br>'; row++; }
-    lineStart = html.length;
-  };
+// Cache computed CSS per style signature so identical runs share the same string
+// (lets the renderer merge them into a single <span> and avoids recomputing).
+const cssCache = new Map<string, string>();
+function cssFor(s: AnsiState): string {
+  const key = `${s.bold ? 1 : 0}${s.dim ? 1 : 0}${s.italic ? 1 : 0}${s.underline ? 1 : 0}|${s.fg ?? ''}|${s.bg ?? ''}`;
+  let css = cssCache.get(key);
+  if (css === undefined) { css = toCSS(s); cssCache.set(key, css); }
+  return css;
+}
 
-  let i = 0;
-  while (i < raw.length) {
-    const ch = raw[i];
+export class TermScreen {
+  private lines: Cell[][] = [[]];
+  private row = 0;
+  private col = 0;
+  private s: AnsiState = mkAnsiState();
+  private carry = ''; // escape sequence split across write() chunks
 
-    if (ch === '\x1b') {
-      const nx = raw[i + 1];
-      if (nx === '[') {
-        // CSI — scan to final byte (0x40–0x7e)
-        let j = i + 2;
-        while (j < raw.length && (raw.charCodeAt(j) < 0x40 || raw.charCodeAt(j) > 0x7e)) j++;
-        const fin = raw[j];
-        const par = raw.slice(i + 2, j);
-        i = j + 1;
-        if (fin === 'm') {
-          flush();
-          const codes = par ? par.split(';').map(Number) : [0];
-          for (let k = 0; k < codes.length; k++) {
-            const code = codes[k];
-            if (code === 0) Object.assign(s, mkAnsiState());
-            else if (code === 1) s.bold = true;
-            else if (code === 2) s.dim  = true;
-            else if (code === 3) s.italic = true;
-            else if (code === 4) s.underline = true;
-            else if (code === 22) { s.bold = false; s.dim = false; }
-            else if (code === 23) s.italic = false;
-            else if (code === 24) s.underline = false;
-            else if (code >= 30 && code <= 37) s.fg = PAL[code - 30];
-            else if (code === 38 && codes[k+1] === 5) { s.fg = c256(codes[k+2] ?? 0); k += 2; }
-            else if (code === 38 && codes[k+1] === 2) { s.fg = `rgb(${codes[k+2]??0},${codes[k+3]??0},${codes[k+4]??0})`; k += 4; }
-            else if (code === 39) s.fg = null;
-            else if (code >= 40 && code <= 47) s.bg = PAL[code - 40];
-            else if (code === 48 && codes[k+1] === 5) { s.bg = c256(codes[k+2] ?? 0); k += 2; }
-            else if (code === 48 && codes[k+1] === 2) { s.bg = `rgb(${codes[k+2]??0},${codes[k+3]??0},${codes[k+4]??0})`; k += 4; }
-            else if (code === 49) s.bg = null;
-            else if (code >= 90 && code <= 97)  s.fg = PAL[code - 82];
-            else if (code >= 100 && code <= 107) s.bg = PAL[code - 92];
-          }
-        } else if (fin === 'B' || fin === 'e') {
-          // CUD / VPR — cursor down
-          emitBr(parseInt(par, 10) || 1);
-        } else if (fin === 'E') {
-          // CNL — cursor next line (down + col 0)
-          emitBr(parseInt(par, 10) || 1);
-        } else if (fin === 'H' || fin === 'f') {
-          // CUP / HVP — cursor position \x1b[row;colH
-          // Emit <br> for each row we advance forward (ConPTY uses this to lay out lines).
-          const parts = par.split(';');
-          const newRow = parseInt(parts[0], 10) || 1;
-          if (newRow > row) emitBr(newRow - row);
-          else if (newRow < row) { flush(); lineStart = html.length; }
-          row = newRow;
-        }
-        // All other CSI (erase, cursor left/right/up, etc.) — silently stripped
-      } else if (nx === ']') {
-        // OSC — skip to BEL or ST
-        let j = i + 2;
-        while (j < raw.length) {
-          if (raw[j] === '\x07') { j++; break; }
-          if (raw[j] === '\x1b' && raw[j + 1] === '\\') { j += 2; break; }
-          j++;
-        }
-        i = j;
-      } else {
-        i += 2; // skip unknown escape
-      }
-    } else if (ch === '\r' && raw[i + 1] === '\n') {
-      emitBr(1); i += 2;
-    } else if (ch === '\n') {
-      emitBr(1); i++;
-    } else if (ch === '\r') {
-      // Bare CR: go to column 0 of current line, discarding what was written.
-      // This matches real-terminal behaviour for in-place progress updates.
-      flush();
-      html = html.slice(0, lineStart);
-      i++;
-    } else if (ch === '\t') {
-      buf += '    '; i++;
-    } else if (ch < '\x20') {
-      i++; // strip other control chars
-    } else {
-      buf += ch; i++;
+  private ensureRow(r: number) {
+    while (this.lines.length <= r) this.lines.push([]);
+  }
+
+  private putChar(ch: string) {
+    this.ensureRow(this.row);
+    const line = this.lines[this.row];
+    while (line.length < this.col) line.push(BLANK);
+    line[this.col] = { ch, css: cssFor(this.s) };
+    this.col++;
+  }
+
+  private applySgr(codes: number[]) {
+    const s = this.s;
+    for (let k = 0; k < codes.length; k++) {
+      const code = codes[k];
+      if (code === 0) Object.assign(s, mkAnsiState());
+      else if (code === 1) s.bold = true;
+      else if (code === 2) s.dim = true;
+      else if (code === 3) s.italic = true;
+      else if (code === 4) s.underline = true;
+      else if (code === 22) { s.bold = false; s.dim = false; }
+      else if (code === 23) s.italic = false;
+      else if (code === 24) s.underline = false;
+      else if (code >= 30 && code <= 37) s.fg = PAL[code - 30];
+      else if (code === 38 && codes[k + 1] === 5) { s.fg = c256(codes[k + 2] ?? 0); k += 2; }
+      else if (code === 38 && codes[k + 1] === 2) { s.fg = `rgb(${codes[k + 2] ?? 0},${codes[k + 3] ?? 0},${codes[k + 4] ?? 0})`; k += 4; }
+      else if (code === 39) s.fg = null;
+      else if (code >= 40 && code <= 47) s.bg = PAL[code - 40];
+      else if (code === 48 && codes[k + 1] === 5) { s.bg = c256(codes[k + 2] ?? 0); k += 2; }
+      else if (code === 48 && codes[k + 1] === 2) { s.bg = `rgb(${codes[k + 2] ?? 0},${codes[k + 3] ?? 0},${codes[k + 4] ?? 0})`; k += 4; }
+      else if (code === 49) s.bg = null;
+      else if (code >= 90 && code <= 97) s.fg = PAL[code - 82];
+      else if (code >= 100 && code <= 107) s.bg = PAL[code - 92];
     }
   }
 
-  flush();
-  return { html, state: s };
+  private eraseInLine(mode: number) {
+    this.ensureRow(this.row);
+    const line = this.lines[this.row];
+    if (mode === 0) {            // cursor → end of line
+      line.length = Math.min(line.length, this.col);
+    } else if (mode === 1) {     // start of line → cursor
+      for (let c = 0; c <= this.col && c < line.length; c++) line[c] = BLANK;
+    } else if (mode === 2) {     // whole line
+      line.length = 0;
+    }
+  }
+
+  private eraseInDisplay(mode: number) {
+    if (mode === 0) {            // cursor → end of screen
+      this.eraseInLine(0);
+      this.lines.length = this.row + 1;
+    } else if (mode === 1) {     // start of screen → cursor
+      for (let r = 0; r < this.row; r++) this.lines[r] = [];
+      this.eraseInLine(1);
+    } else {                     // 2 / 3 — whole screen
+      for (let r = 0; r < this.lines.length; r++) this.lines[r] = [];
+    }
+  }
+
+  /** Feed a chunk of raw PTY text into the screen, mutating it in place. */
+  write(raw: string) {
+    raw = this.carry + raw;
+    this.carry = '';
+    let i = 0;
+    while (i < raw.length) {
+      const ch = raw[i];
+
+      if (ch === '\x1b') {
+        const nx = raw[i + 1];
+        if (nx === undefined) { this.carry = raw.slice(i); break; } // sequence split across chunks
+        if (nx === '[') {
+          // CSI — scan to final byte (0x40–0x7e)
+          let j = i + 2;
+          while (j < raw.length && (raw.charCodeAt(j) < 0x40 || raw.charCodeAt(j) > 0x7e)) j++;
+          if (j >= raw.length) { this.carry = raw.slice(i); break; } // incomplete CSI
+          const fin = raw[j];
+          let par = raw.slice(i + 2, j);
+          const priv = par[0] === '?'; // private mode (e.g. ?25l) — ignore params for motion
+          if (priv) par = par.slice(1);
+          i = j + 1;
+          const n0 = parseInt(par, 10);
+          const arg = isNaN(n0) ? 1 : Math.max(1, n0);
+          if (priv && fin !== 'm') continue; // private set/reset modes — nothing to render
+          switch (fin) {
+            case 'm': {
+              const codes = par ? par.split(';').map(x => parseInt(x, 10) || 0) : [0];
+              this.applySgr(codes);
+              break;
+            }
+            case 'A': this.row = Math.max(0, this.row - arg); break;              // CUU
+            case 'B': case 'e': this.row += arg; break;                          // CUD
+            case 'C': this.col += arg; break;                                    // CUF
+            case 'D': this.col = Math.max(0, this.col - arg); break;             // CUB
+            case 'E': this.row += arg; this.col = 0; break;                      // CNL
+            case 'F': this.row = Math.max(0, this.row - arg); this.col = 0; break; // CPL
+            case 'G': case '`': this.col = arg - 1; break;                       // CHA / HPA
+            case 'd': this.row = arg - 1; break;                                 // VPA
+            case 'H': case 'f': {                                                // CUP / HVP
+              const p = par.split(';');
+              this.row = Math.max(0, (parseInt(p[0], 10) || 1) - 1);
+              this.col = Math.max(0, (parseInt(p[1], 10) || 1) - 1);
+              break;
+            }
+            case 'J': this.eraseInDisplay(isNaN(n0) ? 0 : n0); break;            // ED
+            case 'K': this.eraseInLine(isNaN(n0) ? 0 : n0); break;              // EL
+            // everything else (SU/SD/insert/delete/SGR-mouse…) — ignored
+          }
+        } else if (nx === ']') {
+          // OSC — skip to BEL or ST
+          let j = i + 2;
+          let closed = false;
+          while (j < raw.length) {
+            if (raw[j] === '\x07') { j++; closed = true; break; }
+            if (raw[j] === '\x1b' && raw[j + 1] === '\\') { j += 2; closed = true; break; }
+            j++;
+          }
+          if (!closed) { this.carry = raw.slice(i); break; }
+          i = j;
+        } else {
+          i += 2; // skip unknown 2-byte escape (e.g. ESC( charset select, ESC= …)
+        }
+      } else if (ch === '\r') {
+        this.col = 0; i++;
+      } else if (ch === '\n') {
+        this.row++; this.col = 0; i++;
+      } else if (ch === '\b') {
+        this.col = Math.max(0, this.col - 1); i++;
+      } else if (ch === '\t') {
+        this.col = (Math.floor(this.col / 8) + 1) * 8; i++;
+      } else if (ch === '\x07') {
+        i++; // bell
+      } else if (ch < '\x20') {
+        i++; // strip other control chars
+      } else {
+        this.putChar(ch); i++;
+      }
+    }
+  }
+
+  /** Render the current grid to HTML. Trailing blank lines/cells are trimmed. */
+  toHtml(): string {
+    // Find last row that has any content.
+    let last = this.lines.length - 1;
+    while (last >= 0 && this.lines[last].length === 0) last--;
+    if (last < 0) return '';
+
+    const out: string[] = [];
+    for (let r = 0; r <= last; r++) {
+      const line = this.lines[r];
+      // Trim trailing unstyled blanks so blocks don't carry padding width.
+      let end = line.length;
+      while (end > 0 && line[end - 1].ch === ' ' && line[end - 1].css === '') end--;
+
+      let lineHtml = '';
+      let runCss = '';
+      let runText = '';
+      const flushRun = () => {
+        if (!runText) return;
+        lineHtml += runCss ? `<span style="${runCss}">${esc(runText)}</span>` : esc(runText);
+        runText = '';
+      };
+      for (let c = 0; c < end; c++) {
+        const cell = line[c] ?? BLANK;
+        if (cell.css !== runCss) { flushRun(); runCss = cell.css; }
+        runText += cell.ch;
+      }
+      flushRun();
+      out.push(lineHtml);
+    }
+    return out.join('<br>');
+  }
+}
+
+export const mkScreen = (): TermScreen => new TermScreen();
+
+/**
+ * Legacy one-shot converter kept for any caller that just needs to turn a
+ * self-contained ANSI string into HTML (no incremental redraw semantics).
+ * Internally backed by TermScreen so behaviour matches the live renderer.
+ */
+export function ansiChunkToHtml(raw: string, _state?: AnsiState): { html: string; state: AnsiState } {
+  const screen = mkScreen();
+  screen.write(raw);
+  return { html: screen.toHtml(), state: mkAnsiState() };
 }
