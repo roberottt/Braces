@@ -77,6 +77,66 @@ const GIT_MUTATING_RE =
 const baseName = (s: string): string =>
   (s.toLowerCase().replace(/\.(exe|cmd|bat|ps1|com)$/, "").split(/[\\/]/).pop() || s);
 
+// ── Command-line syntax highlighting ─────────────────────────────────────────
+// The input box is a plain <input> (can't hold coloured spans), so we mirror the
+// typed text in an overlay div whose tokens are wrapped in coloured spans while
+// the real input text is rendered transparent. The two stay pixel-aligned because
+// the overlay copies the input's exact font metrics and scroll offset.
+
+// Programs whose SECOND word is a sub-command worth its own colour (git fetch …).
+const CMD_WITH_SUB = new Set([
+  "git", "npm", "pnpm", "yarn", "bun", "bunx", "cargo", "docker", "podman",
+  "kubectl", "go", "pip", "pip3", "apt", "apt-get", "brew", "systemctl", "gh",
+  "tauri", "deno", "make", "conda", "nix", "helm", "terraform", "rustup", "dotnet",
+]);
+
+const escHtml = (s: string): string =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+// Distinct, calm colours for command names — each command keeps a stable colour
+// derived from its own name, so `git`, `npm`, `cargo`, `ls`… look different.
+const CMD_COLORS = [
+  "#8aa0ff", "#6fcf97", "#e0b07a", "#b08af0", "#7fd6d0",
+  "#f0a3c0", "#d6c87f", "#87b9f5", "#9ad19a", "#f5a97f",
+];
+function cmdColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return CMD_COLORS[h % CMD_COLORS.length];
+}
+
+/** Tokenise a command line into coloured HTML for the overlay. Whitespace preserved. */
+function highlightCmd(text: string): string {
+  if (!text) return "";
+  let html = "";
+  let plainWord = 0;          // index among non-flag / non-operator words
+  let firstWord = "";
+  for (const part of text.split(/(\s+)/)) {
+    if (part === "") continue;
+    if (/^\s+$/.test(part)) { html += escHtml(part); continue; }
+
+    const safe = escHtml(part);
+    if (/^["']/.test(part)) {                         // quoted string
+      html += `<span class="tok-str">${safe}</span>`;
+    } else if (/^[|&;<>]+$/.test(part)) {             // pipe / redirect / chain
+      html += `<span class="tok-op">${safe}</span>`;
+    } else if (part.startsWith("-")) {                // -v / --flag
+      html += `<span class="tok-flag">${safe}</span>`;
+    } else if (plainWord === 0) {                     // command name → per-command colour
+      firstWord = baseName(part);
+      html += `<span style="color:${cmdColor(firstWord)}">${safe}</span>`;
+      plainWord++;
+    } else if (plainWord === 1 && CMD_WITH_SUB.has(firstWord)) { // sub-command
+      html += `<span class="tok-sub">${safe}</span>`;
+      plainWord++;
+    } else {                                          // args / paths
+      html += `<span class="tok-arg">${safe}</span>`;
+      plainWord++;
+    }
+  }
+  return html;
+}
+
 /** True if launching `raw` should take over the terminal (xterm) until it exits. */
 function isInteractiveCommand(raw: string): boolean {
   const tokens = raw.trim().split(/\s+/).filter(Boolean);
@@ -99,6 +159,8 @@ const WarpTerminal: Component<Props> = (props) => {
   let outputRef!: HTMLDivElement;
   let blocksRef!: HTMLDivElement;
   let inputRef!: HTMLInputElement;
+  let highlightRef: HTMLDivElement | undefined;
+  let ghostRef: HTMLDivElement | undefined;
   let claudeTextareaRef: HTMLTextAreaElement | undefined;
   let term: Terminal;
   let fitAddon: FitAddon;
@@ -252,6 +314,17 @@ const WarpTerminal: Component<Props> = (props) => {
         setClaudeImages(prev => [...prev, { path, preview }]);
       }
     }
+  };
+
+  // Coloured mirror of the typed command (rendered into .wib-highlight overlay).
+  const highlightHtml = createMemo(() => highlightCmd(cmdText()));
+
+  // Keep the colour overlay + ghost scrolled in lock-step with the input so the
+  // tokens stay aligned once the command is wider than the visible box.
+  const syncScroll = () => {
+    const x = inputRef?.scrollLeft ?? 0;
+    if (highlightRef) highlightRef.scrollLeft = x;
+    if (ghostRef) ghostRef.scrollLeft = x;
   };
 
   const suggestion = createMemo(() => {
@@ -1199,13 +1272,17 @@ const WarpTerminal: Component<Props> = (props) => {
           <div class="wib-row">
             <span class="wib-chevron">❯</span>
             <div class="wib-input-wrap">
-              <div class="wib-ghost" aria-hidden="true">{suggestion()}</div>
+              <div class="wib-ghost" aria-hidden="true" ref={ghostRef}>{suggestion()}</div>
+              <div class="wib-highlight" aria-hidden="true" ref={highlightRef}>
+                <span class="wib-hl-inner" innerHTML={highlightHtml()} />
+              </div>
               <input
                 ref={inputRef}
                 class="wib-input"
                 type="text"
                 value={cmdText()}
-                onInput={e => { setCmdText(e.currentTarget.value); setShowHistPanel(false); setShowTabPanel(false); setTabCompletions([]); }}
+                onInput={e => { setCmdText(e.currentTarget.value); setShowHistPanel(false); setShowTabPanel(false); setTabCompletions([]); requestAnimationFrame(syncScroll); }}
+                onScroll={syncScroll}
                 onKeyDown={handleKeyDown}
                 placeholder={ptyReady() ? t(store.language, "run_commands_ph") : t(store.language, "connecting_ph")}
                 disabled={!ptyReady()}
