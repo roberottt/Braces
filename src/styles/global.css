@@ -342,6 +342,21 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   word-break: normal;
 }
 
+/* ── Terminal links (Ctrl+Click to open) ─────────────────────────────────── */
+.cmd-block-output a.term-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--fg-dim);
+  cursor: default;
+}
+.cmd-block-output a.term-link:hover {
+  color: var(--accent);
+  text-decoration-style: solid;
+  text-decoration-color: var(--accent);
+  cursor: pointer;
+}
+
 /* ── History panel ────────────────────────────────────────────────────────── */
 .hist-panel {
   background: var(--bg-panel);

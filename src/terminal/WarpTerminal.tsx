@@ -1,6 +1,7 @@
 import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { store, setStore } from "../store/terminalStore";
@@ -1029,7 +1030,14 @@ const WarpTerminal: Component<Props> = (props) => {
     <div class={`warp-terminal${isInteractive() ? " interactive" : ""}${isClaudeSession() ? " claude-session" : ""}`}>
 
       <div class="warp-main">
-        <div class="warp-blocks" ref={blocksRef!}>
+        <div class="warp-blocks" ref={blocksRef!} onClick={(e) => {
+          if (!e.ctrlKey) return;
+          const a = (e.target as HTMLElement).closest?.('a[data-url]') as HTMLElement | null;
+          if (!a) return;
+          e.preventDefault();
+          const url = a.dataset.url ?? '';
+          if (url) shellOpen(url).catch(() => {});
+        }}>
           <Show when={blocks().length === 0 && ptyReady() && !isInteractive()}>
             <NewSessionWelcome cwd={tabCwd()} />
           </Show>
