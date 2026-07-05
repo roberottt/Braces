@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { store, setStore } from "../store/terminalStore";
 import { t } from "../i18n";
 import { getShellInitScript } from "./shellInit";
@@ -790,6 +791,12 @@ const WarpTerminal: Component<Props> = (props) => {
     });
     fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
+    // Mirrors the Ctrl+Click-to-open behavior of block-mode output (see ansiToHtml.ts
+    // linkifyLine) so interactive programs (vim, ssh, htop…) get the same link handling.
+    term.loadAddon(new WebLinksAddon((event, uri) => {
+      if (!event.ctrlKey) return;
+      shellOpen(uri).catch(() => {});
+    }));
     term.open(outputRef);
 
     // Wait for monospace fonts to load so xterm measures correct cell width.
