@@ -78,6 +78,16 @@ const GIT_MUTATING_RE =
 const baseName = (s: string): string =>
   (s.toLowerCase().replace(/\.(exe|cmd|bat|ps1|com)$/, "").split(/[\\/]/).pop() || s);
 
+// Parses the shell prompt marker "[CWD:<path>|EXIT:<code>]" emitted by shellInit.ts.
+// Falls back to a bare "[CWD:<path>]" (no exit code) for safety if a shell hook
+// ever fires without one.
+const CWD_EXIT_RE = /^\[CWD:([\s\S]*)\|EXIT:(-?\d+)\]$/;
+const parseCwdMarker = (bracketed: string): { cwd: string; exitCode: number | null } => {
+  const m = CWD_EXIT_RE.exec(bracketed);
+  if (m) return { cwd: m[1], exitCode: Number(m[2]) };
+  return { cwd: bracketed.replace(/^\[CWD:/, "").replace(/\]$/, ""), exitCode: null };
+};
+
 // ── Command-line syntax highlighting ─────────────────────────────────────────
 // The input box is a plain <input> (can't hold coloured spans), so we mirror the
 // typed text in an overlay div whose tokens are wrapped in coloured spans while
@@ -809,14 +819,14 @@ const WarpTerminal: Component<Props> = (props) => {
     const SHELL_TITLE = /(?:cmd|powershell|pwsh|bash|sh|zsh)(?:\.exe)?\s*$/i;
     term.parser.registerOscHandler(0, (data) => {
       if (data.startsWith("[CWD:")) {
-        const cwd = data.slice(5).replace(/\]$/, "");
+        const { cwd, exitCode } = parseCwdMarker(data);
         if (cwd) setTabCwd(cwd);
-        if (isInteractive()) { exitInteractive(); closeBlock(tabExitCode()); }
+        if (isInteractive()) { exitInteractive(); closeBlock(exitCode); }
         return true;
       }
       if (isInteractive() && SHELL_TITLE.test(data) && Date.now() - interactiveStartedAt > 800) {
         exitInteractive();
-        closeBlock(tabExitCode());
+        closeBlock(null); // shell-title fallback carries no exit-code info
       }
       return false;
     });
@@ -877,10 +887,11 @@ const WarpTerminal: Component<Props> = (props) => {
           const cwdMark = scan.includes(PROMPT_MARK);
           const shellMark = Date.now() - interactiveStartedAt > 800 && SHELL_TITLE_SEQ.test(scan);
           if (cwdMark || shellMark) {
-            const m = /\x1b\]0;\[CWD:([^\x07\x1b\]]*)\]/.exec(scan);
-            if (m?.[1]) setTabCwd(m[1]);
+            const m = /\x1b\]0;(\[CWD:[^\x07\x1b\]]*\])/.exec(scan);
+            const parsed = m ? parseCwdMarker(m[1]) : null;
+            if (parsed?.cwd) setTabCwd(parsed.cwd);
             exitInteractive();
-            closeBlock(tabExitCode());
+            closeBlock(parsed?.exitCode ?? null);
           }
         }
         return;
@@ -890,10 +901,11 @@ const WarpTerminal: Component<Props> = (props) => {
 
       titleBuf = (titleBuf + text).slice(-512);
 
-      const osc0 = /\x1b\]0;\[CWD:([^\x07\x1b\]]*)\](?:\x07|\x1b\\)/.exec(titleBuf);
+      const osc0 = /\x1b\]0;(\[CWD:[^\x07\x1b\]]*\])(?:\x07|\x1b\\)/.exec(titleBuf);
       if (osc0) {
-        setTabCwd(osc0[1]);
-        closeBlock(tabExitCode());
+        const { cwd, exitCode } = parseCwdMarker(osc0[1]);
+        if (cwd) setTabCwd(cwd);
+        closeBlock(exitCode);
         titleBuf = titleBuf.slice(osc0.index + osc0[0].length);
       }
 
@@ -1078,7 +1090,10 @@ const WarpTerminal: Component<Props> = (props) => {
                 return parts.length > 2 ? "…/" + parts.slice(-2).join("/") : (block.cwd || "~");
               };
               const statusCls = () =>
-                !block.done ? "running" : block.exitCode === 0 ? "ok" : "err";
+                !block.done ? "running"
+                : block.exitCode === 0 ? "ok"
+                : block.exitCode === null ? "" // unknown — neutral border, not an error
+                : "err";
 
               return (
                 <div class={`cmd-block ${statusCls()}`}>

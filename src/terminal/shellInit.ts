@@ -6,10 +6,11 @@ export function getShellInitScript(shellType: string): string {
   switch (shellType) {
     case "cmd": {
       // Turn off command echo so typed commands don't appear in xterm output.
-      // Set prompt to emit OSC 0 with [CWD:path], ST-terminated ($E\ = ESC+backslash).
+      // Set prompt to emit OSC 0 with [CWD:path|EXIT:code], ST-terminated ($E\ = ESC+backslash).
       // Using ST instead of BEL because raw \x07 in a PTY command line can be consumed
-      // by ConPTY input processing before reaching cmd.
-      const header = "@ECHO OFF\r\n@PROMPT $E]0;[CWD:$P]$E\\";
+      // by ConPTY input processing before reaching cmd. %errorlevel% is a dynamic
+      // pseudo-variable cmd resolves at prompt-display-time to the last command's exit code.
+      const header = "@ECHO OFF\r\n@PROMPT $E]0;[CWD:$P|EXIT:%errorlevel%]$E\\";
       const macros = [
         "ls=dir /b $*",
         "ll=dir $*",
@@ -32,8 +33,10 @@ export function getShellInitScript(shellType: string): string {
     case "pwsh": {
       // PS7 already has: ls, cat, rm, cp, mv, mkdir, echo, pwd, clear, sort
       const fns = [
-        // Emit OSC 0 with [CWD:path], ST-terminated. $st=[char]0x5c = backslash.
-        'function prompt { $e=[char]0x1b; $st=[char]0x5c; "$e]0;[CWD:$($pwd.Path)]$e$st" }',
+        // Emit OSC 0 with [CWD:path|EXIT:code], ST-terminated. $st=[char]0x5c = backslash.
+        // Exit code must be captured as the prompt function's first statement, before
+        // $? / $LASTEXITCODE get clobbered by anything else the function does.
+        'function prompt { $__ec=if($?){0}elseif($LASTEXITCODE){$LASTEXITCODE}else{1}; $e=[char]0x1b; $st=[char]0x5c; "$e]0;[CWD:$($pwd.Path)|EXIT:$__ec]$e$st" }',
         // touch: create file or update mtime
         "function touch { param([string[]]$f) foreach ($p in $f) { if (!(Test-Path $p)) { New-Item -ItemType File $p | Out-Null } else { (Get-Item $p).LastWriteTime = Get-Date } } }",
         // grep wrapper → Select-String
@@ -50,12 +53,13 @@ export function getShellInitScript(shellType: string): string {
     }
 
     case "zsh": {
-      // Hide the default "user@host dir %" prompt and emit OSC 0 with [CWD:path]
-      // (ST-terminated) via a precmd hook, matching the marker used by pwsh/cmd.
+      // Hide the default "user@host dir %" prompt and emit OSC 0 with [CWD:path|EXIT:code]
+      // (ST-terminated) via a precmd hook, matching the marker used by pwsh/cmd. $? must be
+      // captured as the hook's very first statement, before anything else in it can clobber it.
       const setup = [
         `__b=$'\\033'`,
         "PS1=''",
-        `precmd() { printf '%s]0;[CWD:%s]%s\\\\' "$__b" "$PWD" "$__b"; }`,
+        `precmd() { local __ec=$?; printf '%s]0;[CWD:%s|EXIT:%s]%s\\\\' "$__b" "$PWD" "$__ec" "$__b"; }`,
       ].join("; ");
       return setup + "\rclear\r";
     }
@@ -67,7 +71,7 @@ export function getShellInitScript(shellType: string): string {
       const setup = [
         `__b=$'\\033'`,
         "PS1=''",
-        `__braces_precmd() { printf '%s]0;[CWD:%s]%s\\\\' "$__b" "$PWD" "$__b"; }`,
+        `__braces_precmd() { local __ec=$?; printf '%s]0;[CWD:%s|EXIT:%s]%s\\\\' "$__b" "$PWD" "$__ec" "$__b"; }`,
         "PROMPT_COMMAND=__braces_precmd",
       ].join("; ");
       return setup + "\rclear\r";
