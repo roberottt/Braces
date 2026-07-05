@@ -1,4 +1,4 @@
-import { Component, For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import { Component, For, Index, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open as shellOpen } from "@tauri-apps/plugin-shell";
@@ -171,6 +171,7 @@ const WarpTerminal: Component<Props> = (props) => {
   let outputRef!: HTMLDivElement;
   let blocksRef!: HTMLDivElement;
   let wibContainerRef!: HTMLDivElement;
+  let wibSpacerRef!: HTMLDivElement;
   let inputRef!: HTMLInputElement;
   let highlightRef: HTMLDivElement | undefined;
   let ghostRef: HTMLDivElement | undefined;
@@ -241,6 +242,13 @@ const WarpTerminal: Component<Props> = (props) => {
   };
   const [ptyReady, setPtyReady] = createSignal(false);
   const [isInteractive, setIsInteractive] = createSignal(false);
+  // Drives the visual swap to xterm (the "interactive" CSS class), delayed a beat
+  // behind isInteractive: commands classified interactive that die instantly
+  // (`ssh` with no host, missing `htop`) would otherwise blank the whole block
+  // list and restore it ~100ms later — a full-screen flash on every such error.
+  const [uiInteractive, setUiInteractive] = createSignal(false);
+  const INTERACTIVE_UI_DELAY_MS = 200;
+  let uiFlipTimer: ReturnType<typeof setTimeout> | undefined;
   const [interactiveCmd, setInteractiveCmd] = createSignal("");
   const [claudeText, setClaudeText] = createSignal("");
   const [claudeImages, setClaudeImages] = createSignal<ClaudeImage[]>([]);
@@ -270,8 +278,10 @@ const WarpTerminal: Component<Props> = (props) => {
     saveBlocksTimer = setTimeout(persistBlocks, 500);
   });
 
+  // Keyed off uiInteractive so the composer swaps in/out together with the rest
+  // of the interactive UI (never overlapping the still-visible block list).
   const isClaudeSession = () =>
-    isInteractive() && /^(?:npx\s+)?claude(?:\s|$)/i.test(interactiveCmd().trim());
+    uiInteractive() && /^(?:npx\s+)?claude(?:\s|$)/i.test(interactiveCmd().trim());
 
   // Auto-focus the composer textarea whenever a Claude session starts.
   createEffect(() => { if (isClaudeSession()) setTimeout(() => claudeTextareaRef?.focus(), 50); });
@@ -377,6 +387,15 @@ const WarpTerminal: Component<Props> = (props) => {
   let activeScreen: TermScreen = mkScreen();
   let titleBuf = "";
   let interactiveStartedAt = 0;
+  // True while the current interactive-mode command's plain output is still being
+  // mirrored into its block. Turned off as soon as it draws a real full-screen TUI
+  // frame (alternate screen buffer) or after a short grace window — whichever comes
+  // first — so a genuinely live program (htop, a long ssh session) isn't dumped into
+  // the block wholesale. Until then, this is what makes a program that's merely on
+  // the ALWAYS_INTERACTIVE list (ssh, htop…) but exits instantly with a one-line
+  // error (bad host, missing binary) show that error text instead of an empty block.
+  let captureInteractiveOutput = false;
+  const INTERACTIVE_CAPTURE_GRACE_MS = 1500;
   let lastPtyCols = 0;
   let lastPtyRows = 0;
 
@@ -390,37 +409,75 @@ const WarpTerminal: Component<Props> = (props) => {
     });
   };
 
-  // Whether the user is (roughly) at the bottom of the block list already —
-  // must be read BEFORE new content is appended, since appending grows
-  // scrollHeight and would make an already-at-bottom view look "not at bottom".
+  // Whether the user is (roughly) at the bottom of the block list already.
   const isNearBottom = () => {
     if (!blocksRef) return true;
     const slack = 48;
     return blocksRef.scrollHeight - blocksRef.scrollTop - blocksRef.clientHeight < slack;
   };
 
+  // Sticky auto-follow. The flag is cleared ONLY by an explicit user gesture —
+  // wheel/trackpad scrolling upward (the onWheel handler below) — and re-armed
+  // when the user returns to the bottom or runs a command. Deliberately NOT
+  // derived from scroll events: scroll-event timing vs content growth is racy
+  // (WKWebView dispatches them late against rAF), and any "am I still at the
+  // bottom?" sampling scheme eventually mis-reads its own programmatic scroll
+  // as the user scrolling away, silently killing the follow.
+  let followBottom = true;
+
+  // Pin the view to the bottom now, and keep re-pinning every frame for a short
+  // window. A single one-shot scroll can land before late layout (font metrics,
+  // the block's close-time <br> trim, the exit-code pill row, padding resize)
+  // grows or shrinks the content under it, leaving the tail hidden behind the
+  // input bar. The frame loop makes the final position independent of that
+  // ordering; a wheel-up cancels it instantly via followBottom.
+  const PIN_WINDOW_MS = 250;
+  let pinUntil = 0;
+  let pinActive = false;
+  const pinLoop = () => {
+    if (!followBottom || !blocksRef || performance.now() >= pinUntil) { pinActive = false; return; }
+    const max = blocksRef.scrollHeight - blocksRef.clientHeight;
+    if (blocksRef.scrollTop < max) blocksRef.scrollTop = max;
+    requestAnimationFrame(pinLoop);
+  };
   const scrollToBottom = () => {
-    requestAnimationFrame(() => { if (blocksRef) blocksRef.scrollTop = blocksRef.scrollHeight; });
+    if (!blocksRef) return;
+    blocksRef.scrollTop = blocksRef.scrollHeight;
+    pinUntil = performance.now() + PIN_WINDOW_MS;
+    if (!pinActive) { pinActive = true; requestAnimationFrame(pinLoop); }
   };
 
-  const appendOutput = (text: string) => {
+  // Coalesce streaming renders: PTY bursts deliver many chunks per frame (command
+  // echo, output, prompt marker), and regenerating the block's innerHTML for each
+  // one makes the block visibly flash. Accumulate into activeScreen immediately
+  // (lossless) but rasterise to HTML at most once per animation frame.
+  let renderQueued = false;
+  const renderActiveBlock = () => {
+    renderQueued = false;
     if (!activeBlockId) return;
-    // Streaming output must not yank the view back down if the user scrolled
-    // up to read earlier blocks — only stick to bottom if they were already there.
-    const stick = isNearBottom();
-    activeScreen.write(text);
     const html = activeScreen.toHtml();
     const id = activeBlockId;
     setBlocks(prev => prev.map(b =>
       b.id === id ? { ...b, htmlOutput: html } : b
     ));
-    if (stick) scrollToBottom();
+    if (followBottom) scrollToBottom();
+  };
+
+  const appendOutput = (text: string) => {
+    if (!activeBlockId) return;
+    activeScreen.write(text);
+    if (!renderQueued) {
+      renderQueued = true;
+      requestAnimationFrame(renderActiveBlock);
+    }
   };
 
   const closeBlock = (exitCode: number | null = null) => {
     if (!activeBlockId) return;
+    // Flush any render still waiting on its animation frame — the queued callback
+    // would no-op once activeBlockId is cleared and silently drop the last chunk.
+    if (renderQueued) renderActiveBlock();
     const id = activeBlockId;
-    const stick = isNearBottom();
     setBlocks(prev => prev.map(b => {
       if (b.id !== id) return b;
       // Strip trailing blank lines — ConPTY often emits a screen-buffer redraw
@@ -449,7 +506,7 @@ const WarpTerminal: Component<Props> = (props) => {
       lastPtyRows = BLOCK_ROWS;
       invoke("pty_resize", { tabId: props.tabId, cols: lastPtyCols, rows: BLOCK_ROWS }).catch(() => {});
     }
-    if (stick) scrollToBottom();
+    if (followBottom) scrollToBottom();
   };
 
   const trackCdCommand = (raw: string) => {
@@ -493,18 +550,27 @@ const WarpTerminal: Component<Props> = (props) => {
     if (isInteractive()) return;
     term?.reset(); // clean grid — no stale frame from a previous run can bleed through
     interactiveStartedAt = Date.now();
+    captureInteractiveOutput = true;
     setIsInteractive(true);
+    // The PTY gets real dimensions immediately (the program must lay out for the
+    // true window size from its first frame) — only the visual swap waits.
     requestAnimationFrame(() => {
       fitAddon?.fit();
       lastPtyCols = term?.cols ?? 80;
       lastPtyRows = term?.rows ?? 24;
       invoke("pty_resize", { tabId: props.tabId, cols: lastPtyCols, rows: lastPtyRows }).catch(() => {});
-      term?.focus();
     });
+    uiFlipTimer = setTimeout(() => {
+      if (!isInteractive()) return;
+      setUiInteractive(true);
+      term?.focus();
+    }, INTERACTIVE_UI_DELAY_MS);
   };
   // Return to the block UI: restore the input, drop the frame, refocus the input box.
   const exitInteractive = () => {
     if (!isInteractive()) return;
+    if (uiFlipTimer) clearTimeout(uiFlipTimer);
+    setUiInteractive(false);
     setIsInteractive(false);
     setInteractiveCmd("");
     claudeImages().forEach(img => URL.revokeObjectURL(img.preview));
@@ -518,6 +584,9 @@ const WarpTerminal: Component<Props> = (props) => {
       lastPtyRows = BLOCK_ROWS;
       invoke("pty_resize", { tabId: props.tabId, cols: term.cols, rows: BLOCK_ROWS }).catch(() => {});
     }
+    // Reveal whatever grew in the now-hidden block while .warp-blocks was frozen
+    // (pointer-events: none + visibility: hidden for the whole interactive session).
+    if (followBottom) scrollToBottom();
     setTimeout(() => { inputRef?.focus(); }, 32);
   };
 
@@ -568,6 +637,7 @@ const WarpTerminal: Component<Props> = (props) => {
         setBlocks(prev => [...prev, iblock]);
         activeBlockId = iblock.id;
         activeScreen = mkScreen();
+        followBottom = true; // running a command always jumps to its new block
         scrollToBottom();
         setInteractiveCmd(raw);
         enterInteractive();
@@ -588,6 +658,7 @@ const WarpTerminal: Component<Props> = (props) => {
       setBlocks(prev => [...prev, block]);
       activeBlockId = block.id;
       activeScreen = mkScreen();
+      followBottom = true; // running a command always jumps to its new block
       scrollToBottom();
     }
     sendRaw((raw || "") + "\r");
@@ -884,6 +955,14 @@ const WarpTerminal: Component<Props> = (props) => {
       }
 
       if (isInteractive()) {
+        if (captureInteractiveOutput) {
+          if (ALT_ON.test(text) || Date.now() - interactiveStartedAt > INTERACTIVE_CAPTURE_GRACE_MS) {
+            captureInteractiveOutput = false;
+          } else {
+            appendOutput(text);
+          }
+        }
+
         // Primary: write through xterm so OSC 0 handler can fire.
         term.write(bytes);
 
@@ -909,13 +988,12 @@ const WarpTerminal: Component<Props> = (props) => {
       titleBuf = (titleBuf + text).slice(-512);
 
       const osc0 = /\x1b\]0;(\[CWD:[^\x07\x1b\]]*\])(?:\x07|\x1b\\)/.exec(titleBuf);
-      if (osc0) {
-        const { cwd, exitCode } = parseCwdMarker(osc0[1]);
-        if (cwd) setTabCwd(cwd);
-        closeBlock(exitCode);
-        titleBuf = titleBuf.slice(osc0.index + osc0[0].length);
-      }
 
+      // Append this chunk's text BEFORE closing the block below. A command that
+      // fails almost instantly (e.g. `ssh` with no host, a missing binary) can have
+      // its error text and the shell's exit-marker land in the very same PTY read —
+      // closing first would reset activeBlockId/activeScreen and silently drop that
+      // text, leaving the block empty except for the exit code.
       let displayText = text;
       if (echoFilter) {
         const echoLine = echoFilter + "\r\n";
@@ -929,6 +1007,13 @@ const WarpTerminal: Component<Props> = (props) => {
       displayText = displayText.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "");
 
       if (displayText) appendOutput(displayText);
+
+      if (osc0) {
+        const { cwd, exitCode } = parseCwdMarker(osc0[1]);
+        if (cwd) setTabCwd(cwd);
+        closeBlock(exitCode);
+        titleBuf = titleBuf.slice(osc0.index + osc0[0].length);
+      }
     });
 
     const unlistenAnalysis = await listen<string>("ai-analysis-token", (ev) => {
@@ -953,13 +1038,24 @@ const WarpTerminal: Component<Props> = (props) => {
     });
     ro.observe(outputRef);
 
-    // Reserve exactly as much bottom space in the block list as the input bar
-    // actually occupies. It's a fixed-position overlay whose height varies a lot
-    // (history/branch/tab-completion panels can add 100-300px above the input
-    // row), so a hardcoded padding would let the last blocks render underneath it.
+    // Keep the end-of-list spacer exactly as tall as the input bar overlay.
+    // The bar's height varies a lot (history/branch/tab-completion panels can
+    // add 100-300px above the input row), so a hardcoded spacer would let the
+    // last blocks render underneath it. The reserved space is a real child
+    // element rather than padding-bottom — WebKit doesn't reliably count a
+    // flex scroll container's bottom padding in scrollHeight, which let
+    // content hide behind the bar before scrolling ever activated.
     const wibRo = new ResizeObserver((entries) => {
       const h = entries[0]?.contentRect.height ?? 0;
-      if (blocksRef) blocksRef.style.paddingBottom = `${h + 16}px`;
+      // h reads 0 mid-teardown; writing that through would collapse the
+      // reserved space while scrollTop is already at max. Keep the last
+      // sane value instead.
+      if (h > 0 && wibSpacerRef) {
+        wibSpacerRef.style.height = `${h + 16}px`;
+        // Growing the spacer pushes the bottom edge down past the viewport —
+        // re-pin so the last block isn't left hidden under the taller bar.
+        if (followBottom && blocksRef) blocksRef.scrollTop = blocksRef.scrollHeight;
+      }
     });
     wibRo.observe(wibContainerRef);
 
@@ -1016,6 +1112,8 @@ const WarpTerminal: Component<Props> = (props) => {
         // history cards (any block left mid-run when the app closed shows as done).
         setBlocks(savedBlocks.map((b) => ({ ...b, done: true })));
         isRestoredTab = true;
+        // A restored session should open at its most recent block, not at the top.
+        scrollToBottom();
       }
     } catch (e) {
       console.error("[braces] db_load_blocks failed:", e);
@@ -1071,10 +1169,17 @@ const WarpTerminal: Component<Props> = (props) => {
   });
 
   return (
-    <div class={`warp-terminal${isInteractive() ? " interactive" : ""}${isClaudeSession() ? " claude-session" : ""}`}>
+    <div class={`warp-terminal${uiInteractive() ? " interactive" : ""}${isClaudeSession() ? " claude-session" : ""}`}>
 
       <div class="warp-main">
-        <div class="warp-blocks" ref={blocksRef!} onClick={(e) => {
+        <div class="warp-blocks" ref={blocksRef!} onWheel={(e) => {
+          // Explicit upward wheel/trackpad = the user wants to read history:
+          // detach from the bottom. This is the ONLY thing that detaches.
+          if (e.deltaY < 0) followBottom = false;
+        }} onScroll={() => {
+          // Re-arm (never disarm) when the user arrives back at the bottom.
+          if (isNearBottom()) followBottom = true;
+        }} onClick={(e) => {
           if (!e.ctrlKey) return;
           const a = (e.target as HTMLElement).closest?.('a[data-url]') as HTMLElement | null;
           if (!a) return;
@@ -1085,50 +1190,55 @@ const WarpTerminal: Component<Props> = (props) => {
           <Show when={blocks().length === 0 && ptyReady() && !isInteractive()}>
             <NewSessionWelcome cwd={tabCwd()} />
           </Show>
-          <For each={blocks()}>
+          <Index each={blocks()}>
             {(block) => {
               const elapsed = () => {
-                if (!block.endTime) return null;
-                const ms = block.endTime - block.startTime;
+                const endTime = block().endTime;
+                if (!endTime) return null;
+                const ms = endTime - block().startTime;
                 return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(2)}s`;
               };
               const blockCwd = () => {
-                const parts = (block.cwd || "~").replace(/\\/g, "/").split("/").filter(Boolean);
-                return parts.length > 2 ? "…/" + parts.slice(-2).join("/") : (block.cwd || "~");
+                const cwd = block().cwd;
+                const parts = (cwd || "~").replace(/\\/g, "/").split("/").filter(Boolean);
+                return parts.length > 2 ? "…/" + parts.slice(-2).join("/") : (cwd || "~");
               };
               const statusCls = () =>
-                !block.done ? "running"
-                : block.exitCode === 0 ? "ok"
-                : block.exitCode === null ? "" // unknown — neutral border, not an error
+                !block().done ? "running"
+                : block().exitCode === 0 ? "ok"
+                : block().exitCode === null ? "" // unknown — neutral border, not an error
                 : "err";
 
               return (
                 <div class={`cmd-block ${statusCls()}`}>
                   <div class="cmd-block-header">
                     <span class="cmd-block-cwd">⬡ {blockCwd()}</span>
-                    <Show when={block.done && block.exitCode !== null}>
-                      <span class={`cmd-block-status ${block.exitCode === 0 ? "ok" : "err"}`}>
-                        {block.exitCode === 0 ? "✓" : `✕ ${block.exitCode}`}
+                    <Show when={block().done && block().exitCode !== null}>
+                      <span class={`cmd-block-status ${block().exitCode === 0 ? "ok" : "err"}`}>
+                        {block().exitCode === 0 ? "✓" : `✕ ${block().exitCode}`}
                       </span>
                     </Show>
                     <Show when={elapsed() !== null}>
                       <span class="cmd-block-elapsed">{elapsed()}</span>
                     </Show>
-                    <Show when={!block.done}>
+                    <Show when={!block().done}>
                       <span class="cmd-block-spinner">●</span>
                     </Show>
                   </div>
                   <div class="cmd-block-cmd">
                     <span class="cmd-block-chevron">❯</span>
-                    {block.cmd}
+                    {block().cmd}
                   </div>
-                  <Show when={!!block.htmlOutput}>
-                    <div class="cmd-block-output" innerHTML={block.htmlOutput} />
+                  <Show when={!!block().htmlOutput}>
+                    <div class="cmd-block-output" innerHTML={block().htmlOutput} />
                   </Show>
                 </div>
               );
             }}
-          </For>
+          </Index>
+          {/* Reserves the input bar's footprint inside the scroll content —
+              must stay the last child. See the wibRo ResizeObserver. */}
+          <div class="wib-spacer" ref={wibSpacerRef!} aria-hidden="true" />
         </div>
 
         <div ref={outputRef} class="warp-output" />
@@ -1186,8 +1296,13 @@ const WarpTerminal: Component<Props> = (props) => {
         </div>
       </Show>
 
-      <Show when={!isInteractive()}>
-        <div class="wib-container" ref={wibContainerRef!}>
+      {/* Always mounted; hidden via CSS in interactive mode. Wrapping this in a
+          <Show> destroyed the node on every interactive session: the ResizeObserver
+          then reported height 0 (padding-bottom collapsed to 16px → blocks hid
+          behind the input bar with scrollTop already at max), and after the <Show>
+          recreated the node the observer was still bound to the dead one, so the
+          padding never recovered. */}
+      <div class="wib-container" ref={wibContainerRef!}>
 
         <Show when={showBranchPanel() && branches().length > 0}>
           <div class="branch-panel">
@@ -1348,8 +1463,7 @@ const WarpTerminal: Component<Props> = (props) => {
           </div>
         </div>
 
-        </div>{/* wib-container */}
-      </Show>
+      </div>{/* wib-container */}
 
     </div>
   );

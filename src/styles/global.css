@@ -223,17 +223,29 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
 }
 
 /* Scrollable command-block list — normal mode.
-   Bottom padding reserves space so the last block isn't hidden under the WIB bar. */
+   The space under the last block (so it never hides behind the WIB bar) is
+   reserved by the .wib-spacer child element, NOT by padding-bottom: WebKit
+   does not reliably include a scroll container's bottom padding in
+   scrollHeight for flex layouts, which let content slide behind the input
+   bar before the container ever became scrollable. A real child element is
+   counted by every engine. */
 .warp-blocks {
   position: absolute;
   inset: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 10px 12px 110px;
+  padding: 10px 12px 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
   z-index: 1;
+}
+
+/* Height is kept in sync with the input bar's real height by a ResizeObserver
+   (see WarpTerminal); 110px is the pre-measurement fallback. */
+.wib-spacer {
+  flex-shrink: 0;
+  height: 110px;
 }
 
 /* xterm container — always occupies full warp-main for correct sizing.
@@ -260,6 +272,13 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   z-index: 2;
   opacity: 1;
   pointer-events: auto;
+}
+
+/* Input bar stays mounted in interactive mode (its ResizeObserver must keep a
+   live node — see WarpTerminal) but is invisible and click-through. */
+.warp-terminal.interactive .wib-container {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 
