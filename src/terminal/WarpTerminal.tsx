@@ -1202,6 +1202,48 @@ const WarpTerminal: Component<Props> = (props) => {
         <div ref={outputRef} class="warp-output" />
       </div>
 
+      {/* Slim status footer for Claude Code sessions. The regular input bar
+          (which carries the branch/changes pills) is hidden for the whole
+          interactive session, so without this the user loses all git context
+          while Claude edits files. Rendered as a flex sibling of .warp-main so
+          it takes real height — the ResizeObserver refits xterm automatically. */}
+      <Show when={uiInteractive() && isClaudeSession()}>
+        <div class="claude-bar">
+          <span class="claude-bar-brand">✳ claude</span>
+          <span class="claude-bar-spacer" />
+          <span class="claude-bar-pill" title={tabCwd()}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
+            </svg>
+            <span class="claude-bar-cwd">{shortCwd()}</span>
+          </span>
+          <Show when={store.gitIsRepo}>
+            <span class="claude-bar-pill" title={store.gitBranch}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/>
+                <circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>
+              </svg>
+              {store.gitBranch || "HEAD"}
+              <Show when={store.gitAhead > 0}><span class="claude-bar-sync">↑{store.gitAhead}</span></Show>
+              <Show when={store.gitBehind > 0}><span class="claude-bar-sync">↓{store.gitBehind}</span></Show>
+            </span>
+            <button
+              class="claude-bar-pill claude-bar-changes"
+              classList={{ active: store.gitPanelOpen }}
+              title={t(store.language, "view_changes_tip")}
+              onClick={() => setStore("gitPanelOpen", v => !v)}
+            >
+              <Show when={store.gitInsertions > 0 || store.gitDeletions > 0} fallback={<span class="claude-bar-clean">✓</span>}>
+                <span class="claude-bar-ins">+{store.gitInsertions}</span>
+                <span class="claude-bar-del">−{store.gitDeletions}</span>
+              </Show>
+            </button>
+          </Show>
+        </div>
+      </Show>
+
       {/* Always mounted; hidden via CSS in interactive mode. Wrapping this in a
           <Show> destroyed the node on every interactive session: the ResizeObserver
           then reported height 0 (padding-bottom collapsed to 16px → blocks hid

@@ -281,6 +281,80 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   pointer-events: none;
 }
 
+/* ── Claude Code session footer ─────────────────────────────────────────────
+   Shown only while a `claude` session owns the xterm pane: cwd + branch +
+   change counters, mirroring the pills of the (hidden) input bar. */
+.claude-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  font-family: var(--font-label);
+  font-size: 10px;
+  color: var(--fg-dim);
+  user-select: none;
+  z-index: 3; /* above .warp-output (z-index: 2 in interactive mode) */
+}
+
+.claude-bar-brand {
+  color: var(--fg-mid);
+  font-family: var(--font-term);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.claude-bar-spacer { flex: 1; }
+
+.claude-bar-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-family: var(--font-label);
+  font-size: 10px;
+  color: var(--fg-mid);
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.claude-bar-cwd {
+  font-family: var(--font-term);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 340px;
+}
+
+.claude-bar-sync { color: var(--accent-amber); }
+
+.claude-bar-changes {
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.claude-bar-changes:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  color: var(--fg);
+}
+.claude-bar-changes.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.claude-bar-ins   { color: var(--accent-lime); }
+.claude-bar-del   { color: var(--accent-red); }
+.claude-bar-clean { color: var(--fg-mid); }
+.claude-bar-changes.active .claude-bar-ins,
+.claude-bar-changes.active .claude-bar-del,
+.claude-bar-changes.active .claude-bar-clean { color: inherit; }
+
 
 /* ── Command blocks ──────────────────────────────────────────────────────── */
 .cmd-block {
