@@ -10,6 +10,13 @@ export type Tab = {
   lastExitCode: number | null;
 };
 
+export type EditorTab = {
+  id: string;
+  relPath: string;
+  title: string;
+  dirty: boolean;
+};
+
 export type TerminalStore = {
   cwd: string;
   lastExitCode: number | null;
@@ -50,10 +57,17 @@ export type TerminalStore = {
   gitDeletions: number;
   gitSelectedFile: string | null;
   gitSelectedStaged: boolean;
+  // Editor view
+  currentView: "terminal" | "editor";
+  editorTabs: EditorTab[];
+  activeEditorTabId: string | null;
 };
 
 let _tabCounter = 0;
 export const genTabId = () => `tab-${Date.now()}-${_tabCounter++}`;
+
+let _editorTabCounter = 0;
+export const genEditorTabId = () => `edit-${Date.now()}-${_editorTabCounter++}`;
 
 const initialTabId = genTabId();
 
@@ -91,4 +105,8 @@ export const [store, setStore] = createStore<TerminalStore>({
   gitDeletions: 0,
   gitSelectedFile: null,
   gitSelectedStaged: false,
+  // Editor view
+  currentView: "terminal",
+  editorTabs: [],
+  activeEditorTabId: null,
 });

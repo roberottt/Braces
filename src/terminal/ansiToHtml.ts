@@ -249,6 +249,21 @@ export class TermScreen {
     }
   }
 
+  /** Wrap plain-text URLs in the rendered HTML with clickable anchors. */
+  private static linkifyLine(html: string): string {
+    // Only match text nodes (between tags), not tag attributes.
+    return html.replace(/(<[^>]*>)|([^<]+)/g, (_, tag, text) => {
+      if (tag) return tag;
+      return text.replace(/https?:\/\/[^\s<>]+/g, (raw: string) => {
+        // Trim trailing punctuation that typically isn't part of the URL.
+        const display = raw.replace(/[.,;:!?)"']+$/, '');
+        const trailing = raw.slice(display.length);
+        // data-url holds the HTML-escaped URL; dataset.url decodes entities automatically.
+        return `<a class="term-link" data-url="${display}" title="Ctrl+Click to open">${display}</a>${trailing}`;
+      });
+    });
+  }
+
   /** Render the current grid to HTML. Trailing blank lines/cells are trimmed. */
   toHtml(): string {
     // Find last row that has any content.
@@ -277,7 +292,7 @@ export class TermScreen {
         runText += cell.ch;
       }
       flushRun();
-      out.push(lineHtml);
+      out.push(TermScreen.linkifyLine(lineHtml));
     }
     return out.join('<br>');
   }

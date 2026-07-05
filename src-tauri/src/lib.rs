@@ -76,6 +76,9 @@ pub fn run() {
             ai::commands::get_metrics,
             // Shell completion
             commands::shell_complete,
+            // Filesystem (editor)
+            commands::fs_read_file,
+            commands::fs_write_file,
             // DB persistence
             db::db_load_tabs,
             db::db_save_tabs,
@@ -99,7 +102,7 @@ pub fn run() {
             git::commands::git_discard,
             git::commands::git_stage_all,
             git::commands::git_commit,
-            git::commands::git_file_tree,
+            git::commands::git_dir_children,
             git::commands::git_diff_all,
             git::commands::git_checkout,
         ])
@@ -263,6 +266,24 @@ mod commands {
 
         dirs.truncate(50);
         dirs
+    }
+
+    /// Read a UTF-8 text file's full contents. `path` may be relative (joined
+    /// to `cwd`) or absolute.
+    #[tauri::command]
+    pub fn fs_read_file(cwd: String, path: String) -> Result<String, String> {
+        let p = std::path::Path::new(&path);
+        let full = if p.is_absolute() { p.to_path_buf() } else { std::path::Path::new(&cwd).join(p) };
+        std::fs::read_to_string(&full).map_err(|e| e.to_string())
+    }
+
+    /// Write UTF-8 text contents to a file, overwriting it. `path` may be
+    /// relative (joined to `cwd`) or absolute.
+    #[tauri::command]
+    pub fn fs_write_file(cwd: String, path: String, contents: String) -> Result<(), String> {
+        let p = std::path::Path::new(&path);
+        let full = if p.is_absolute() { p.to_path_buf() } else { std::path::Path::new(&cwd).join(p) };
+        std::fs::write(&full, contents).map_err(|e| e.to_string())
     }
 
     /// Save raw image bytes (from clipboard) to a temp file and return the absolute path.

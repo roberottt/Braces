@@ -12,6 +12,7 @@ import TabSidebar from "./hud/TabSidebar";
 import GitPanel from "./hud/GitPanel";
 import WorkspacePanel from "./hud/WorkspacePanel";
 import CodeReviewPanel from "./hud/CodeReviewPanel";
+import EditorView from "./editor/EditorView";
 import { store, setStore, genTabId } from "./store/terminalStore";
 import { initChats } from "./store/chatStore";
 import { t } from "./i18n";
@@ -195,6 +196,11 @@ const App: Component = () => {
         setStore("workspaceOpen", opening);
         if (opening) setStore("leftDockView", "files");
       }
+      // Ctrl+E (no Shift) → toggle full-window editor view
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "e" && !e.repeat) {
+        e.preventDefault();
+        setStore("currentView", (v) => (v === "editor" ? "terminal" : "editor"));
+      }
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "r") {
         e.preventDefault();
         setStore("codeReviewOpen", v => !v);
@@ -228,58 +234,62 @@ const App: Component = () => {
 
       <StatusBar />
 
-      <div class="workspace">
-        {/* Left dock — sessions or files */}
-        <Show when={store.tabsSidebarOpen}>
-          <Show when={store.leftDockView === "sessions"} fallback={<WorkspacePanel />}>
-            <TabSidebar />
+      <Show when={store.currentView === "editor"} fallback={
+        <div class="workspace">
+          {/* Left dock — sessions or files */}
+          <Show when={store.tabsSidebarOpen}>
+            <Show when={store.leftDockView === "sessions"} fallback={<WorkspacePanel />}>
+              <TabSidebar />
+            </Show>
           </Show>
-        </Show>
 
-        {/* Show-sidebar button when sidebar is hidden — flex sibling, not inside terminal */}
-        <Show when={!store.tabsSidebarOpen}>
-          <button
-            class="tab-sidebar-show-btn"
-            title={t(store.language, "show_sessions_tip")}
-            onClick={() => setStore("tabsSidebarOpen", true)}
-          >
-            ›
-          </button>
-        </Show>
+          {/* Show-sidebar button when sidebar is hidden — flex sibling, not inside terminal */}
+          <Show when={!store.tabsSidebarOpen}>
+            <button
+              class="tab-sidebar-show-btn"
+              title={t(store.language, "show_sessions_tip")}
+              onClick={() => setStore("tabsSidebarOpen", true)}
+            >
+              ›
+            </button>
+          </Show>
 
-        {/* Terminal area — all tabs mounted, only active visible.
-            Rendered only after DB hydration so PTYs are not spawned for seed tabs. */}
-        <div class="terminal-area">
-          <Show when={store.hydrated}>
-            <For each={store.tabs}>
-              {(tab) => (
-                <div
-                  class="tab-panel"
-                  classList={{ hidden: tab.id !== store.activeTabId }}
-                >
-                  <WarpTerminal tabId={tab.id} />
-                  <Show when={tab.id === store.activeTabId}>
-                    <ErrorPanel />
-                    <Show when={store.historySearchOpen}>
-                      <HistoryOverlay />
+          {/* Terminal area — all tabs mounted, only active visible.
+              Rendered only after DB hydration so PTYs are not spawned for seed tabs. */}
+          <div class="terminal-area">
+            <Show when={store.hydrated}>
+              <For each={store.tabs}>
+                {(tab) => (
+                  <div
+                    class="tab-panel"
+                    classList={{ hidden: tab.id !== store.activeTabId }}
+                  >
+                    <WarpTerminal tabId={tab.id} />
+                    <Show when={tab.id === store.activeTabId}>
+                      <ErrorPanel />
+                      <Show when={store.historySearchOpen}>
+                        <HistoryOverlay />
+                      </Show>
                     </Show>
-                  </Show>
-                </div>
-              )}
-            </For>
+                  </div>
+                )}
+              </For>
+            </Show>
+          </div>
+
+          <Show when={store.sidePanelOpen}>
+            <AiSidePanel />
+          </Show>
+          <Show when={store.gitPanelOpen}>
+            <GitPanel />
+          </Show>
+          <Show when={store.codeReviewOpen}>
+            <CodeReviewPanel />
           </Show>
         </div>
-
-        <Show when={store.sidePanelOpen}>
-          <AiSidePanel />
-        </Show>
-        <Show when={store.gitPanelOpen}>
-          <GitPanel />
-        </Show>
-        <Show when={store.codeReviewOpen}>
-          <CodeReviewPanel />
-        </Show>
-      </div>
+      }>
+        <EditorView />
+      </Show>
 
       <Show when={store.metricsOpen}>
         <MetricsOverlay />

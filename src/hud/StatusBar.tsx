@@ -15,12 +15,6 @@ const StatusBar: Component = () => {
       .catch(() => {});
   });
 
-  const exitDot = () => {
-    const code = store.lastExitCode;
-    if (code === null) return null;
-    return code === 0 ? "ok" : "err";
-  };
-
   return (
     <div class="status-bar" data-tauri-drag-region>
       {/* CWD */}
@@ -54,17 +48,18 @@ const StatusBar: Component = () => {
         </span>
       </Show>
 
-      {/* Exit code */}
-      {exitDot() && (
-        <span class={`sb-item ${exitDot()}`}>
-          exit {store.lastExitCode}
-        </span>
-      )}
-
       {/* Draggable empty area — double-click maximizes (native behaviour) */}
       <span class="sb-spacer" data-tauri-drag-region />
 
       {/* Controls */}
+      <span
+        class="sb-item"
+        style={{ cursor: "pointer", color: store.currentView === "editor" ? "var(--accent)" : undefined }}
+        onClick={() => setStore("currentView", (v) => (v === "editor" ? "terminal" : "editor"))}
+        title={t(store.language, "editor_view_tip")}
+      >
+        ✎
+      </span>
       <span
         class="sb-item"
         style={{ cursor: "pointer", color: store.gitPanelOpen ? "var(--accent)" : undefined }}

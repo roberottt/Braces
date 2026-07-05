@@ -162,6 +162,15 @@ const T = {
     connecting_ph:         "Connecting…",
     msg_claude_ph:         "Message Claude… (Shift+Enter for newline · ↑↓ Enter navigate menus)",
     send_enter:            "Send (Enter)",
+
+    // Editor view
+    editor_view_tip:       "Editor [Ctrl+E]",
+    editor_close_tab:      "Close tab",
+    editor_unsaved_pre:    "Unsaved changes in ",
+    editor_unsaved_post:   ". Save before closing?",
+    editor_close_save:     "Save & close",
+    editor_close_discard:  "Discard & close",
+    no_file_open:          "No file open — pick one from the tree on the left",
   },
   es: {
     // Settings modal
@@ -324,6 +333,15 @@ const T = {
     connecting_ph:         "Conectando…",
     msg_claude_ph:         "Mensaje a Claude… (Shift+Intro nueva línea · ↑↓ Intro navegar menús)",
     send_enter:            "Enviar (Intro)",
+
+    // Editor view
+    editor_view_tip:       "Editor [Ctrl+E]",
+    editor_close_tab:      "Cerrar pestaña",
+    editor_unsaved_pre:    "Cambios sin guardar en ",
+    editor_unsaved_post:   ". ¿Guardar antes de cerrar?",
+    editor_close_save:     "Guardar y cerrar",
+    editor_close_discard:  "Descartar y cerrar",
+    no_file_open:          "Ningún archivo abierto — elegí uno del árbol de la izquierda",
   },
 } as const;
 
