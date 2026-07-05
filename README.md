@@ -59,6 +59,25 @@ When you launch a full-screen TUI (vim, htop, ssh, lazygit, fzf, …) Braces aut
 - **Always interactive**: `vim`, `nvim`, `nano`, `emacs`, `less`, `man`, `top`, `htop`, `tmux`, `fzf`, `lazygit`, `k9s`, `ssh`, and more
 - **REPLs when bare**: `python`, `node`, `psql`, `bash`, `pwsh`, and more — only take over when launched without a script argument
 
+### Built-in code editor (`Ctrl+E`)
+
+A full-window text editor powered by **CodeMirror 6**, toggled with `Ctrl+E` or from the status bar:
+
+- **File tree sidebar** — browse the repository and open any file with a click
+- **Multiple editor tabs** with a dirty (`●`) indicator for unsaved changes
+- **Syntax highlighting** auto-detected from the file name (all languages bundled in `@codemirror/language-data`)
+- **Git gutter** — added / modified / deleted line markers next to the line numbers, refreshed live
+- **`Ctrl+S`** saves the file and refreshes git status
+- **External change detection** — if the file changes on disk (git checkout, discard, pull, another program) the buffer reloads automatically, but never while you have unsaved edits
+
+### Clickable links (`Ctrl+Click`)
+
+URLs in command output are detected and open in the default browser with `Ctrl+Click` — both in block mode and inside interactive programs (vim, ssh, htop, …) via the xterm.js web-links addon.
+
+### Command input syntax highlighting
+
+The input bar colorizes as you type: sub-commands, flags, strings, and operators each get their own token color, matching the active theme.
+
 ### Claude Code composer
 
 Running `npx claude` or `claude` inside the terminal activates a dedicated rich composer replacing the standard input bar:
@@ -151,7 +170,7 @@ Five accent-color themes (the background stays pure black — `#000` — always)
 
 ### Session persistence
 
-Terminal sessions and AI chat history are persisted to a SQLite database at `%APPDATA%\braces\braces.db` and restored automatically on the next launch:
+Terminal sessions and AI chat history are persisted to a SQLite database (`~/.config/braces/braces.db` on macOS/Linux, `%APPDATA%\braces\braces.db` on Windows) and restored automatically on the next launch:
 
 - **Terminal tabs** — command blocks and CWD are saved; on restart they appear as read-only history with a fresh shell starting in the saved directory
 - **AI chats** — full conversation history is written to the DB; closing the panel no longer loses the conversation
@@ -205,6 +224,8 @@ Three tabs:
 | `Ctrl+W` | Close active tab |
 | `Ctrl+Tab` | Next tab |
 | `Ctrl+Shift+Tab` | Previous tab |
+| `Ctrl+E` | Toggle code editor view |
+| `Ctrl+S` | Save file (in editor view) |
 | `Ctrl+Shift+A` | Toggle AI side panel |
 | `Ctrl+Shift+M` | Toggle metrics overlay |
 | `Ctrl+Shift+G` | Toggle git panel |
@@ -231,8 +252,15 @@ terminal/
 │   │   ├── WarpTerminal.tsx    # Block renderer + PTY client + input bar
 │   │   ├── HistoryOverlay.tsx  # Ctrl+R search overlay
 │   │   └── shellInit.ts        # Shell-specific init scripts (OSC 7 prompt)
+│   ├── editor/
+│   │   ├── EditorView.tsx      # Full-window editor layout (Ctrl+E)
+│   │   ├── EditorPane.tsx      # CodeMirror 6 buffer per open file
+│   │   ├── EditorTabBar.tsx    # Open-file tabs
+│   │   ├── gitGutter.ts        # Added/modified/deleted line markers
+│   │   └── languages.ts        # Language auto-detection
 │   ├── hud/
 │   │   ├── AiSidePanel.tsx     # AI agent chat panel
+│   │   ├── FileTree.tsx        # Repository file tree (editor sidebar)
 │   │   ├── StatusBar.tsx       # Top bar
 │   │   ├── TabSidebar.tsx      # Session list
 │   │   ├── GitPanel.tsx        # Git operations
@@ -306,15 +334,25 @@ cargo check                                      # backend (from src-tauri/)
 cargo test                                       # run unit tests
 ```
 
+### Opening the app on macOS
+
+The app is not notarized, so Gatekeeper will block it on first launch ("Braces is damaged and can't be opened"). Remove the quarantine attribute after copying it to `/Applications`:
+
+```sh
+xattr -cr /Applications/Braces.app
+```
+
+Then open it normally.
+
 ---
 
 ## Configuration
 
 On first launch the onboarding wizard configures the essentials. Settings are persisted to `localStorage` and the app's config directory:
 
-- **Config file**: `%APPDATA%\braces\config.toml` (Windows) — AI provider defaults, visual settings
-- **Session database**: `%APPDATA%\braces\braces.db` — SQLite database for terminal sessions, command blocks, and AI chat history
-- **Context store**: `%APPDATA%\braces\context.json` — RAG / semantic history index
+- **Config file**: `~/.config/braces/config.toml` (macOS/Linux) / `%APPDATA%\braces\config.toml` (Windows) — AI provider defaults, visual settings
+- **Session database**: `braces.db` in the same directory — SQLite database for terminal sessions, command blocks, and AI chat history
+- **Context store**: `context.json` in the same directory — RAG / semantic history index
 - **API keys**: OS keychain (never on disk in plain text)
 - **UI preferences**: `localStorage` (theme, language, provider, model, history)
 
