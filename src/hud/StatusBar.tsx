@@ -15,12 +15,6 @@ const StatusBar: Component = () => {
       .catch(() => {});
   });
 
-  const exitDot = () => {
-    const code = store.lastExitCode;
-    if (code === null) return null;
-    return code === 0 ? "ok" : "err";
-  };
-
   return (
     <div class="status-bar" data-tauri-drag-region>
       {/* CWD */}
@@ -53,13 +47,6 @@ const StatusBar: Component = () => {
           </Show>
         </span>
       </Show>
-
-      {/* Exit code */}
-      {exitDot() && (
-        <span class={`sb-item ${exitDot()}`}>
-          exit {store.lastExitCode}
-        </span>
-      )}
 
       {/* Draggable empty area — double-click maximizes (native behaviour) */}
       <span class="sb-spacer" data-tauri-drag-region />
