@@ -11,18 +11,18 @@ const IGNORE_DIRS: &[&str] = &[
     "__pycache__", ".next", "build", "out", "coverage",
 ];
 
-const MAX_NODES: usize = 2_000;
+const MAX_NODES: usize = 5_000;
 
-/// Recursively build a `GitTreeNode` tree, annotating files with git status.
-fn build_tree(
+/// List a single directory level (no recursion), annotating files with git
+/// status. Subdirectories are *not* expanded — the frontend fetches their
+/// children lazily on demand. This keeps one huge subtree (e.g. a `.cargo`
+/// registry with tens of thousands of entries) from starving its siblings
+/// out of a shared node budget, which is what an eager recursive walk did.
+fn list_dir_level(
     root:       &std::path::Path,
     dir:        &std::path::Path,
     status_map: &HashMap<String, GitStatusKind>,
-    depth:      u32,
-    count:      &mut usize,
 ) -> Vec<GitTreeNode> {
-    if depth > 6 || *count >= MAX_NODES { return vec![]; }
-
     let Ok(entries) = std::fs::read_dir(dir) else { return vec![]; };
     let mut list: Vec<_> = entries.flatten().collect();
 
@@ -43,7 +43,7 @@ fn build_tree(
 
     let mut nodes = Vec::new();
     for entry in list {
-        if *count >= MAX_NODES { break; }
+        if nodes.len() >= MAX_NODES { break; }
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
         let rel  = path.strip_prefix(root)
@@ -52,15 +52,49 @@ fn build_tree(
 
         if path.is_dir() {
             if IGNORE_DIRS.contains(&name.as_str()) { continue; }
-            let children = build_tree(root, &path, status_map, depth + 1, count);
-            nodes.push(GitTreeNode { name, rel_path: rel, is_dir: true, status: None, children });
+            nodes.push(GitTreeNode { name, rel_path: rel, is_dir: true, status: None, children: vec![] });
         } else {
             let status = status_map.get(&rel).cloned();
             nodes.push(GitTreeNode { name, rel_path: rel, is_dir: false, status, children: vec![] });
-            *count += 1;
         }
     }
     nodes
+}
+
+fn build_status_map(porcelain: &str) -> HashMap<String, GitStatusKind> {
+    let mut status_map: HashMap<String, GitStatusKind> = HashMap::new();
+
+    for line in porcelain.lines() {
+        if line.len() < 4 { continue; }
+        let xy   = &line[..2];
+        let rest = line[3..].trim();
+        // Renames: "old -> new" — take new path
+        let path = if let Some(arrow) = rest.find(" -> ") {
+            rest[arrow + 4..].replace('\\', "/")
+        } else {
+            rest.replace('\\', "/")
+        };
+        // Paths with spaces come back quoted: "a b.txt"
+        let path = path.trim_matches('"').to_string();
+
+        let kind = if xy.contains('?') {
+            GitStatusKind::Untracked
+        } else if xy.contains('U') || xy == "AA" || xy == "DD" {
+            GitStatusKind::Conflicted
+        } else if xy.contains('R') {
+            GitStatusKind::Renamed
+        } else if xy.contains('A') {
+            GitStatusKind::Added
+        } else if xy.contains('D') {
+            GitStatusKind::Deleted
+        } else {
+            GitStatusKind::Modified
+        };
+
+        status_map.insert(path, kind);
+    }
+
+    status_map
 }
 
 /// Check whether `cwd` is inside a git repository.
@@ -213,58 +247,27 @@ pub async fn git_branch_info(cwd: String) -> Result<GitBranchInfo, String> {
     Ok(GitBranchInfo { current, all })
 }
 
-/// Return the full project file tree with per-file git status badges.
+/// List the children of `rel_path` (relative to `cwd`; empty string = `cwd`
+/// itself) one level deep, with per-file git status badges. Called both for
+/// the initial root listing and, lazily, whenever the frontend expands a
+/// directory node — so no subtree is ever walked before the user asks for it.
 #[tauri::command]
-pub async fn git_file_tree(cwd: String) -> Result<GitTreeNode, String> {
+pub async fn git_dir_children(cwd: String, rel_path: String) -> Result<Vec<GitTreeNode>, String> {
     // Build a path→status map from `git status --porcelain`. `-uall` so files
     // inside a new untracked directory each get a status badge (git otherwise
     // collapses them into a single directory entry).
     let raw = run_git(&cwd, &["status", "--porcelain", "--untracked-files=all"]).await.unwrap_or_default();
-    let mut status_map: HashMap<String, GitStatusKind> = HashMap::new();
-
-    for line in raw.lines() {
-        if line.len() < 4 { continue; }
-        let xy   = &line[..2];
-        let rest = line[3..].trim();
-        // Renames: "old -> new" — take new path
-        let path = if let Some(arrow) = rest.find(" -> ") {
-            rest[arrow + 4..].replace('\\', "/")
-        } else {
-            rest.replace('\\', "/")
-        };
-        // Paths with spaces come back quoted: "a b.txt"
-        let path = path.trim_matches('"').to_string();
-
-        let kind = if xy.contains('?') {
-            GitStatusKind::Untracked
-        } else if xy.contains('U') || xy == "AA" || xy == "DD" {
-            GitStatusKind::Conflicted
-        } else if xy.contains('R') {
-            GitStatusKind::Renamed
-        } else if xy.contains('A') {
-            GitStatusKind::Added
-        } else if xy.contains('D') {
-            GitStatusKind::Deleted
-        } else {
-            GitStatusKind::Modified
-        };
-
-        status_map.insert(path, kind);
-    }
+    let status_map = build_status_map(&raw);
 
     let cwd2 = cwd.clone();
-    let (root_name, children) = tokio::task::spawn_blocking(move || {
+    let rel2 = rel_path.clone();
+    let children = tokio::task::spawn_blocking(move || {
         let root = std::path::Path::new(&cwd2);
-        let root_name = root.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(&cwd2)
-            .to_string();
-        let mut count = 0usize;
-        let children = build_tree(root, root, &status_map, 0, &mut count);
-        (root_name, children)
+        let dir  = if rel2.is_empty() { root.to_path_buf() } else { root.join(&rel2) };
+        list_dir_level(root, &dir, &status_map)
     }).await.map_err(|e| e.to_string())?;
 
-    Ok(GitTreeNode { name: root_name, rel_path: String::new(), is_dir: true, status: None, children })
+    Ok(children)
 }
 
 /// Switch to an existing branch.

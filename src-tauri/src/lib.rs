@@ -99,7 +99,7 @@ pub fn run() {
             git::commands::git_discard,
             git::commands::git_stage_all,
             git::commands::git_commit,
-            git::commands::git_file_tree,
+            git::commands::git_dir_children,
             git::commands::git_diff_all,
             git::commands::git_checkout,
         ])

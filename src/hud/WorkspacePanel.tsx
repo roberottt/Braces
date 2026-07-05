@@ -1,4 +1,4 @@
-import { Component, For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { Component, For, Show, createEffect, createSignal, on, onCleanup, onMount } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { store, setStore } from "../store/terminalStore";
 import { t } from "../i18n";
@@ -29,14 +29,45 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 // ── recursive tree node ──────────────────────────────────────────────────────
+//
+// Rendered like the classic unix `tree` command (├── / └── / │) since this is
+// a terminal app — connectors are plain monospace text, not icon glyphs.
+//
+// Directories are loaded lazily: a node's children are only fetched from the
+// backend the first time it's expanded. Eagerly walking the whole tree used
+// to let one huge subtree (e.g. a `.cargo` registry with tens of thousands of
+// entries) exhaust the node budget before its siblings were even listed.
 
-function TreeNode(props: { node: GitTreeNode; depth: number }) {
-  const [open, setOpen] = createSignal(props.depth < 2);
-  const indent = () => `${props.depth * 10 + 8}px`;
+function TreeNode(props: { node: GitTreeNode; prefix: string; isLast: boolean; depth: number; refreshEpoch: number }) {
+  const [open,     setOpen]     = createSignal(false);
+  const [children, setChildren] = createSignal<GitTreeNode[]>([]);
+  const [fetched,  setFetched]  = createSignal(false);
+
+  const connector   = () => (props.isLast ? "└── " : "├── ");
+  const childPrefix = () => props.prefix + (props.isLast ? "    " : "│   ");
+
+  const loadChildren = async () => {
+    try {
+      const kids = await invoke<GitTreeNode[]>("git_dir_children", { cwd: store.cwd, relPath: props.node.relPath });
+      setChildren(kids);
+    } catch {
+      setChildren([]);
+    } finally {
+      setFetched(true);
+    }
+  };
+
+  // Re-fetch already-expanded directories when a refresh is triggered (e.g.
+  // after staging/committing), so git-status badges stay current.
+  createEffect(on(() => props.refreshEpoch, (_epoch, prevEpoch) => {
+    if (prevEpoch !== undefined && props.node.isDir && fetched()) loadChildren();
+  }));
 
   const handleClick = () => {
     if (props.node.isDir) {
-      setOpen(v => !v);
+      const next = !open();
+      setOpen(next);
+      if (next && !fetched()) loadChildren();
     } else {
       setStore("gitSelectedFile",   props.node.relPath);
       setStore("gitSelectedStaged", false);
@@ -53,14 +84,15 @@ function TreeNode(props: { node: GitTreeNode; depth: number }) {
           "ws-file": !props.node.isDir,
           active:    !props.node.isDir && store.gitSelectedFile === props.node.relPath,
         }}
-        style={{ "padding-left": indent() }}
         onClick={handleClick}
         title={props.node.relPath || props.node.name}
       >
-        <span class="ws-icon">
-          {props.node.isDir ? (open() ? "▾" : "▸") : "·"}
+        <span class="ws-prefix">{props.prefix}{connector()}</span>
+        <span class="ws-chevron">{props.node.isDir ? (open() ? "▾" : "▸") : ""}</span>
+        <span class="ws-name">
+          {props.node.name}
+          <Show when={props.node.isDir}><span class="ws-slash">/</span></Show>
         </span>
-        <span class="ws-name">{props.node.name}</span>
         <Show when={props.node.status}>
           <span
             class="ws-badge"
@@ -71,8 +103,16 @@ function TreeNode(props: { node: GitTreeNode; depth: number }) {
         </Show>
       </div>
       <Show when={props.node.isDir && open()}>
-        <For each={props.node.children}>
-          {(child) => <TreeNode node={child} depth={props.depth + 1} />}
+        <For each={children()}>
+          {(child, i) => (
+            <TreeNode
+              node={child}
+              prefix={childPrefix()}
+              isLast={i() === children().length - 1}
+              depth={props.depth + 1}
+              refreshEpoch={props.refreshEpoch}
+            />
+          )}
         </For>
       </Show>
     </>
@@ -82,20 +122,22 @@ function TreeNode(props: { node: GitTreeNode; depth: number }) {
 // ── panel ────────────────────────────────────────────────────────────────────
 
 const WorkspacePanel: Component = () => {
-  const [tree,    setTree]    = createSignal<GitTreeNode | null>(null);
-  const [loading, setLoading] = createSignal(false);
+  const [roots,        setRoots]        = createSignal<GitTreeNode[] | null>(null);
+  const [loading,      setLoading]      = createSignal(false);
+  const [refreshEpoch, setRefreshEpoch] = createSignal(0);
 
   const refresh = async () => {
     const cwd = store.cwd;
     if (!cwd || cwd === "~") return;
     setLoading(true);
     try {
-      const t = await invoke<GitTreeNode>("git_file_tree", { cwd });
-      setTree(t);
+      const kids = await invoke<GitTreeNode[]>("git_dir_children", { cwd, relPath: "" });
+      setRoots(kids);
     } catch {
-      setTree(null);
+      setRoots(null);
     } finally {
       setLoading(false);
+      setRefreshEpoch(e => e + 1);
     }
   };
 
@@ -128,7 +170,7 @@ const WorkspacePanel: Component = () => {
       </div>
 
       {/* Repo root label */}
-      <Show when={tree()}>
+      <Show when={roots()}>
         <div class="ws-root-label" title={store.cwd}>
           {store.cwd.replace(/\\/g, "/").split("/").slice(-2).join("/")}
         </div>
@@ -139,12 +181,20 @@ const WorkspacePanel: Component = () => {
         <Show when={loading()}>
           <div class="git-empty-state">{t(store.language, "loading")}</div>
         </Show>
-        <Show when={!loading() && tree()}>
-          <For each={tree()!.children}>
-            {(node) => <TreeNode node={node} depth={0} />}
+        <Show when={!loading() && roots()}>
+          <For each={roots()!}>
+            {(node, i) => (
+              <TreeNode
+                node={node}
+                prefix=""
+                isLast={i() === roots()!.length - 1}
+                depth={0}
+                refreshEpoch={refreshEpoch()}
+              />
+            )}
           </For>
         </Show>
-        <Show when={!loading() && !tree()}>
+        <Show when={!loading() && !roots()}>
           <div class="git-empty-state">{t(store.language, "no_read_dir")}</div>
         </Show>
       </div>
