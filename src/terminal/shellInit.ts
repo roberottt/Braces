@@ -49,6 +49,30 @@ export function getShellInitScript(shellType: string): string {
       return fns + "\r\nClear-Host\r\n";
     }
 
+    case "zsh": {
+      // Hide the default "user@host dir %" prompt and emit OSC 0 with [CWD:path]
+      // (ST-terminated) via a precmd hook, matching the marker used by pwsh/cmd.
+      const setup = [
+        `__b=$'\\033'`,
+        "PS1=''",
+        `precmd() { printf '%s]0;[CWD:%s]%s\\\\' "$__b" "$PWD" "$__b"; }`,
+      ].join("; ");
+      return setup + "\rclear\r";
+    }
+
+    case "bash": {
+      // Same idea as zsh, but bash has no precmd hook — define a function and point
+      // PROMPT_COMMAND at its name (a bare name avoids re-parsing quotes/backslashes,
+      // since PROMPT_COMMAND's string form is otherwise re-evaluated like typed input).
+      const setup = [
+        `__b=$'\\033'`,
+        "PS1=''",
+        `__braces_precmd() { printf '%s]0;[CWD:%s]%s\\\\' "$__b" "$PWD" "$__b"; }`,
+        "PROMPT_COMMAND=__braces_precmd",
+      ].join("; ");
+      return setup + "\rclear\r";
+    }
+
     default:
       return "";
   }
