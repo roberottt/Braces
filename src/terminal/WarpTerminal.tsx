@@ -159,6 +159,7 @@ type Props = { tabId: string };
 const WarpTerminal: Component<Props> = (props) => {
   let outputRef!: HTMLDivElement;
   let blocksRef!: HTMLDivElement;
+  let wibContainerRef!: HTMLDivElement;
   let inputRef!: HTMLInputElement;
   let highlightRef: HTMLDivElement | undefined;
   let ghostRef: HTMLDivElement | undefined;
@@ -378,24 +379,37 @@ const WarpTerminal: Component<Props> = (props) => {
     });
   };
 
+  // Whether the user is (roughly) at the bottom of the block list already —
+  // must be read BEFORE new content is appended, since appending grows
+  // scrollHeight and would make an already-at-bottom view look "not at bottom".
+  const isNearBottom = () => {
+    if (!blocksRef) return true;
+    const slack = 48;
+    return blocksRef.scrollHeight - blocksRef.scrollTop - blocksRef.clientHeight < slack;
+  };
+
   const scrollToBottom = () => {
     requestAnimationFrame(() => { if (blocksRef) blocksRef.scrollTop = blocksRef.scrollHeight; });
   };
 
   const appendOutput = (text: string) => {
     if (!activeBlockId) return;
+    // Streaming output must not yank the view back down if the user scrolled
+    // up to read earlier blocks — only stick to bottom if they were already there.
+    const stick = isNearBottom();
     activeScreen.write(text);
     const html = activeScreen.toHtml();
     const id = activeBlockId;
     setBlocks(prev => prev.map(b =>
       b.id === id ? { ...b, htmlOutput: html } : b
     ));
-    scrollToBottom();
+    if (stick) scrollToBottom();
   };
 
   const closeBlock = (exitCode: number | null = null) => {
     if (!activeBlockId) return;
     const id = activeBlockId;
+    const stick = isNearBottom();
     setBlocks(prev => prev.map(b => {
       if (b.id !== id) return b;
       // Strip trailing blank lines — ConPTY often emits a screen-buffer redraw
@@ -424,7 +438,7 @@ const WarpTerminal: Component<Props> = (props) => {
       lastPtyRows = BLOCK_ROWS;
       invoke("pty_resize", { tabId: props.tabId, cols: lastPtyCols, rows: BLOCK_ROWS }).catch(() => {});
     }
-    scrollToBottom();
+    if (stick) scrollToBottom();
   };
 
   const trackCdCommand = (raw: string) => {
@@ -920,6 +934,16 @@ const WarpTerminal: Component<Props> = (props) => {
     });
     ro.observe(outputRef);
 
+    // Reserve exactly as much bottom space in the block list as the input bar
+    // actually occupies. It's a fixed-position overlay whose height varies a lot
+    // (history/branch/tab-completion panels can add 100-300px above the input
+    // row), so a hardcoded padding would let the last blocks render underneath it.
+    const wibRo = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect.height ?? 0;
+      if (blocksRef) blocksRef.style.paddingBottom = `${h + 16}px`;
+    });
+    wibRo.observe(wibContainerRef);
+
     const onGlobalKey = (e: KeyboardEvent) => {
       if (store.activeTabId !== props.tabId) return;
       if (e.ctrlKey && e.shiftKey && e.key === "A") { e.preventDefault(); setStore("sidePanelOpen", v => !v); }
@@ -1019,6 +1043,7 @@ const WarpTerminal: Component<Props> = (props) => {
       unlistenPty();
       unlistenAnalysis();
       ro.disconnect();
+      wibRo.disconnect();
       window.removeEventListener("keydown", onGlobalKey);
       window.removeEventListener("braces:inject-cmd", onInject);
       invoke("pty_kill", { tabId: props.tabId }).catch(() => {});
@@ -1140,7 +1165,7 @@ const WarpTerminal: Component<Props> = (props) => {
       </Show>
 
       <Show when={!isInteractive()}>
-        <div class="wib-container">
+        <div class="wib-container" ref={wibContainerRef!}>
 
         <Show when={showBranchPanel() && branches().length > 0}>
           <div class="branch-panel">
