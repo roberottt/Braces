@@ -82,7 +82,7 @@ const StatusBar: Component = () => {
         onClick={() => setStore("sidePanelOpen", (v) => !v)}
         title={t(store.language, "ai_panel_tip")}
       >
-        ANI
+        R2
       </span>
       <span
         class="sb-item"
