@@ -160,8 +160,6 @@ const T = {
     view_changes_tip:      "View changes (Ctrl+Shift+G)",
     run_commands_ph:       "Run commands…",
     connecting_ph:         "Connecting…",
-    msg_claude_ph:         "Message Claude… (Shift+Enter for newline · ↑↓ Enter navigate menus)",
-    send_enter:            "Send (Enter)",
 
     // Editor view
     editor_view_tip:       "Editor [Ctrl+E]",
@@ -331,8 +329,6 @@ const T = {
     view_changes_tip:      "Ver cambios (Ctrl+Shift+G)",
     run_commands_ph:       "Ejecutar comandos…",
     connecting_ph:         "Conectando…",
-    msg_claude_ph:         "Mensaje a Claude… (Shift+Intro nueva línea · ↑↓ Intro navegar menús)",
-    send_enter:            "Enviar (Intro)",
 
     // Editor view
     editor_view_tip:       "Editor [Ctrl+E]",

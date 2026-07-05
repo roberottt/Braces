@@ -78,14 +78,13 @@ URLs in command output are detected and open in the default browser with `Ctrl+C
 
 The input bar colorizes as you type: sub-commands, flags, strings, and operators each get their own token color, matching the active theme.
 
-### Claude Code composer
+### Claude Code integration
 
-Running `npx claude` or `claude` inside the terminal activates a dedicated rich composer replacing the standard input bar:
+Running `npx claude` or `claude` inside the terminal keeps Claude Code fully inline in the terminal — you type straight into Claude's own input, like in Warp:
 
-- **Multi-line textarea** with `Shift+Enter` for newlines
-- **Image paste** — paste clipboard images directly; they are saved to temp files and included in the message
-- **Navigation passthrough** — when the textarea is empty, arrow keys and Enter route to Claude's interactive menus
-- **Ctrl+C / Ctrl+D / Escape** always forwarded to the PTY even while composing
+- **`Shift+Enter` for newlines** — translated to Claude Code's insert-newline binding
+- **Image paste** — paste clipboard images directly; they are saved to temp files and their path is pasted so Claude attaches them
+- **Everything else passes through natively** — menus, arrow keys, `Ctrl+C`, `Escape`, autocomplete
 
 ### Multi-tab sessions
 

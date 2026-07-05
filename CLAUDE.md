@@ -61,9 +61,9 @@ The app has two distinct layers that communicate via Tauri's `invoke()` IPC brid
 
 `WarpTerminal` switches from block UI to raw xterm.js when the running process is a known TUI program (vim, tmux, ssh, fzf, etc.) or a REPL launched without arguments. When the program exits, block mode resumes.
 
-### Claude Code composer
+### Claude Code sessions
 
-When `claude` or `npx claude` runs inside the terminal, the input bar upgrades to a multi-line textarea with image paste support. Arrow keys and Enter pass through to Claude's menus when the textarea is empty.
+When `claude` or `npx claude` runs inside the terminal it stays in raw xterm.js mode like any other TUI (no separate input box — same as Warp). Two extras are layered on top of plain passthrough: Shift+Enter is translated to ESC+CR (Claude Code's insert-newline binding), and pasting an image saves it to a temp file and pastes the path so Claude Code attaches it.
 
 ## Key localStorage keys
 

@@ -24,7 +24,6 @@ const NEON_NOIR_THEME = {
   selectionBackground: "#8aa0ff33",
 };
 
-type ClaudeImage = { path: string; preview: string };
 type HistEntry  = { cmd: string; ts: number };
 
 type CommandBlock = {
@@ -175,7 +174,6 @@ const WarpTerminal: Component<Props> = (props) => {
   let inputRef!: HTMLInputElement;
   let highlightRef: HTMLDivElement | undefined;
   let ghostRef: HTMLDivElement | undefined;
-  let claudeTextareaRef: HTMLTextAreaElement | undefined;
   let term: Terminal;
   let fitAddon: FitAddon;
 
@@ -250,8 +248,6 @@ const WarpTerminal: Component<Props> = (props) => {
   const INTERACTIVE_UI_DELAY_MS = 200;
   let uiFlipTimer: ReturnType<typeof setTimeout> | undefined;
   const [interactiveCmd, setInteractiveCmd] = createSignal("");
-  const [claudeText, setClaudeText] = createSignal("");
-  const [claudeImages, setClaudeImages] = createSignal<ClaudeImage[]>([]);
   const [blocks, setBlocks] = createSignal<CommandBlock[]>([]);
 
   // Persist blocks to SQLite. Saves ALL blocks with a command — NOT just the ones
@@ -278,64 +274,30 @@ const WarpTerminal: Component<Props> = (props) => {
     saveBlocksTimer = setTimeout(persistBlocks, 500);
   });
 
-  // Keyed off uiInteractive so the composer swaps in/out together with the rest
-  // of the interactive UI (never overlapping the still-visible block list).
+  // Claude Code runs directly in xterm (like Warp) — no separate composer.
+  // This flag only gates the two extras layered on top of plain TUI passthrough:
+  // Shift+Enter → newline, and image paste → temp file + pasted path.
   const isClaudeSession = () =>
-    uiInteractive() && /^(?:npx\s+)?claude(?:\s|$)/i.test(interactiveCmd().trim());
+    isInteractive() && /^(?:npx\s+)?claude(?:\s|$)/i.test(interactiveCmd().trim());
 
-  // Auto-focus the composer textarea whenever a Claude session starts.
-  createEffect(() => { if (isClaudeSession()) setTimeout(() => claudeTextareaRef?.focus(), 50); });
-
-  const submitClaudeMessage = () => {
-    const text = claudeText();
-    const images = claudeImages();
-    if (!text.trim() && images.length === 0) return;
-
-    const parts: string[] = [];
-    if (text.trim()) parts.push(text.trim());
-    parts.push(...images.map(img => img.path));
-    const msg = parts.join("\n");
-
-    // The Enter (\r) is ALWAYS sent as a separate, delayed write. If text + \r arrive in
-    // one PTY chunk, Claude Code's stdin handling doesn't flush the submit until the next
-    // event — which is why messages used to need a second Enter to go through.
-    if (msg.includes("\n")) {
-      // Multi-line: wrap in bracketed-paste so internal newlines stay as input rather
-      // than submitting each line. Claude debounces pastes (~100ms), so the submitting
-      // \r must wait past that window or it gets absorbed into the paste buffer.
-      sendRaw(`\x1b[200~${msg}\x1b[201~`);
-      setTimeout(() => sendRaw("\r"), 160);
-    } else {
-      // Single line: send as plain text (no bracketed-paste = no paste debounce), then
-      // the \r shortly after as its own stdin event to trigger the submit.
-      sendRaw(msg);
-      setTimeout(() => sendRaw("\r"), 40);
-    }
-
-    setClaudeText("");
-    setClaudeImages(prev => { prev.forEach(img => URL.revokeObjectURL(img.preview)); return []; });
-    if (claudeTextareaRef) {
-      claudeTextareaRef.style.height = "auto";
-      setTimeout(() => claudeTextareaRef?.focus(), 0);
-    }
-  };
-
-  const handleClaudePaste = async (e: ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (const item of Array.from(items)) {
-      if (item.type.startsWith("image/")) {
-        e.preventDefault();
-        const blob = item.getAsFile();
-        if (!blob) continue;
-        const buf = await blob.arrayBuffer();
-        const ext = item.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
-        const data = Array.from(new Uint8Array(buf));
-        const path = await invoke<string>("save_temp_image", { data, ext }).catch(() => "");
-        if (!path) continue;
-        const preview = URL.createObjectURL(blob);
-        setClaudeImages(prev => [...prev, { path, preview }]);
-      }
+  // Image paste during a Claude session: save the clipboard image to a temp file
+  // and paste its path (bracketed, so it lands in the input instead of submitting).
+  // Claude Code picks the path up as an attachment — same mechanism Warp uses.
+  // Text-only pastes fall through to xterm's native paste handling.
+  const handleXtermPaste = (e: ClipboardEvent) => {
+    if (!isClaudeSession()) return;
+    const images = Array.from(e.clipboardData?.items ?? []).filter(i => i.type.startsWith("image/"));
+    if (images.length === 0) return;
+    e.preventDefault();
+    e.stopPropagation(); // capture phase: keeps xterm's own paste handler out
+    for (const item of images) {
+      const blob = item.getAsFile();
+      if (!blob) continue;
+      const ext = item.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
+      blob.arrayBuffer()
+        .then(buf => invoke<string>("save_temp_image", { data: Array.from(new Uint8Array(buf)), ext }))
+        .then(path => { if (path) sendRaw(`\x1b[200~${path}\x1b[201~`); })
+        .catch(() => {});
     }
   };
 
@@ -573,9 +535,6 @@ const WarpTerminal: Component<Props> = (props) => {
     setUiInteractive(false);
     setIsInteractive(false);
     setInteractiveCmd("");
-    claudeImages().forEach(img => URL.revokeObjectURL(img.preview));
-    setClaudeImages([]);
-    setClaudeText("");
     term?.reset();
     // Restore the tall block-mode screen so the PTY stops scrolling once the
     // interactive program (which ran at the real window height) has exited.
@@ -922,13 +881,28 @@ const WarpTerminal: Component<Props> = (props) => {
       xtermTextarea.addEventListener("focus", () => {
         if (!isInteractive()) {
           setTimeout(() => { if (!isInteractive()) inputRef?.focus(); }, 0);
-        } else if (isClaudeSession()) {
-          setTimeout(() => { if (isClaudeSession()) claudeTextareaRef?.focus(); }, 0);
         }
       });
     }
 
     term.onData(data => { if (isInteractive()) sendRaw(data); });
+
+    // Claude Code: Shift+Enter inserts a newline instead of submitting. xterm would
+    // send a plain \r for it, so translate to ESC+CR (what Option/Meta+Enter sends),
+    // which Claude Code binds to insert-newline in any terminal.
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type === "keydown" && e.key === "Enter" && e.shiftKey && isClaudeSession()) {
+        // preventDefault too: returning false only skips xterm's handling — the
+        // browser would still put a newline in xterm's helper textarea.
+        e.preventDefault();
+        sendRaw("\x1b\r");
+        return false;
+      }
+      return true;
+    });
+
+    // Capture-phase: intercept image pastes before xterm's own paste handler.
+    outputRef.addEventListener("paste", handleXtermPaste, true);
 
     // ── PTY data routing ────────────────────────────────────────────────────
     // Interactive mode: bytes go to xterm (primary) + raw scan (backup).
@@ -1064,23 +1038,6 @@ const WarpTerminal: Component<Props> = (props) => {
       if (e.ctrlKey && e.shiftKey && e.key === "A") { e.preventDefault(); setStore("sidePanelOpen", v => !v); }
       if (e.ctrlKey && e.shiftKey && e.key === "M") { e.preventDefault(); setStore("metricsOpen", v => !v); }
 
-      // While the Claude composer has focus, control signals must still reach the PTY.
-      if (isClaudeSession()) {
-        if (e.ctrlKey && e.key === "c") {
-          e.preventDefault();
-          sendRaw("\x03");
-          setClaudeText("");
-          if (claudeTextareaRef) claudeTextareaRef.style.height = "auto";
-        } else if (e.ctrlKey && e.key === "d") {
-          e.preventDefault();
-          sendRaw("\x04");
-        } else if (e.key === "Escape") {
-          e.preventDefault();
-          sendRaw("\x1b");
-        }
-        return;
-      }
-
       if (isInteractive()) return;
       if (e.ctrlKey && e.key === "r" && !e.shiftKey) { e.preventDefault(); setStore("historySearchOpen", v => !v); }
       if (e.ctrlKey && e.key === "f" && store.errorFix) {
@@ -1163,13 +1120,14 @@ const WarpTerminal: Component<Props> = (props) => {
       wibRo.disconnect();
       window.removeEventListener("keydown", onGlobalKey);
       window.removeEventListener("braces:inject-cmd", onInject);
+      outputRef.removeEventListener("paste", handleXtermPaste, true);
       invoke("pty_kill", { tabId: props.tabId }).catch(() => {});
       term.dispose();
     });
   });
 
   return (
-    <div class={`warp-terminal${uiInteractive() ? " interactive" : ""}${isClaudeSession() ? " claude-session" : ""}`}>
+    <div class={`warp-terminal${uiInteractive() ? " interactive" : ""}`}>
 
       <div class="warp-main">
         <div class="warp-blocks" ref={blocksRef!} onWheel={(e) => {
@@ -1243,58 +1201,6 @@ const WarpTerminal: Component<Props> = (props) => {
 
         <div ref={outputRef} class="warp-output" />
       </div>
-
-      <Show when={isClaudeSession()}>
-        <div class="claude-composer">
-          <Show when={claudeImages().length > 0}>
-            <div class="claude-images">
-              <For each={claudeImages()}>
-                {(img, i) => (
-                  <div class="claude-image-preview">
-                    <img src={img.preview} alt="" />
-                    <button class="claude-image-remove" onClick={() => {
-                      URL.revokeObjectURL(img.preview);
-                      setClaudeImages(prev => prev.filter((_, j) => j !== i()));
-                    }}>✕</button>
-                  </div>
-                )}
-              </For>
-            </div>
-          </Show>
-          <div class="claude-input-row">
-            <span class="claude-chevron">❯</span>
-            <textarea
-              ref={claudeTextareaRef}
-              class="claude-textarea"
-              value={claudeText()}
-              onInput={e => {
-                setClaudeText(e.currentTarget.value);
-                e.currentTarget.style.height = "auto";
-                e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
-              }}
-              onKeyDown={e => {
-                // When the composer is empty, forward navigation keys straight to Claude
-                // so its interactive menus (model picker, permission prompts, etc.) work
-                // with arrows / Enter / Tab. When there's text, behave as a message box.
-                if (claudeText().length === 0 && !e.shiftKey) {
-                  const NAV: Record<string, string> = {
-                    ArrowUp: "\x1b[A", ArrowDown: "\x1b[B",
-                    ArrowRight: "\x1b[C", ArrowLeft: "\x1b[D",
-                    Enter: "\r", Tab: "\t",
-                  };
-                  const seq = NAV[e.key];
-                  if (seq) { e.preventDefault(); sendRaw(seq); return; }
-                }
-                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitClaudeMessage(); }
-              }}
-              onPaste={handleClaudePaste}
-              placeholder={t(store.language, "msg_claude_ph")}
-              rows={1}
-            />
-            <button class="claude-send-btn" title={t(store.language, "send_enter")} onClick={submitClaudeMessage}>↵</button>
-          </div>
-        </div>
-      </Show>
 
       {/* Always mounted; hidden via CSS in interactive mode. Wrapping this in a
           <Show> destroyed the node on every interactive session: the ResizeObserver
