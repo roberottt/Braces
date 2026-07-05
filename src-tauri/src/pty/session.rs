@@ -37,6 +37,10 @@ impl PtySession {
             .map_err(|e| PtyError::Pty(e.to_string()))?;
 
         let (mut cmd, shell_type) = default_shell_cmd();
+        // Advertise terminal capabilities so CLIs (Claude Code, etc.) emit color.
+        // xterm.js supports truecolor, so this is safe to announce.
+        cmd.env("TERM", "xterm-256color");
+        cmd.env("COLORTERM", "truecolor");
         // Use the provided cwd if it exists on disk; fall back to the home directory.
         let effective_cwd = start_cwd
             .as_deref()
