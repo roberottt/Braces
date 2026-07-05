@@ -67,6 +67,14 @@ const StatusBar: Component = () => {
       {/* Controls */}
       <span
         class="sb-item"
+        style={{ cursor: "pointer", color: store.currentView === "editor" ? "var(--accent)" : undefined }}
+        onClick={() => setStore("currentView", (v) => (v === "editor" ? "terminal" : "editor"))}
+        title={t(store.language, "editor_view_tip")}
+      >
+        ✎
+      </span>
+      <span
+        class="sb-item"
         style={{ cursor: "pointer", color: store.gitPanelOpen ? "var(--accent)" : undefined }}
         onClick={() => setStore("gitPanelOpen", (v) => !v)}
         title={t(store.language, "source_control_tip")}

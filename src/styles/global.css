@@ -3130,4 +3130,147 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   margin: 2px 0;
 }
 
+/* ── Editor view ── */
+
+.editor-view {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-primary);
+}
+
+.editor-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.editor-sidebar .tab-sidebar-header {
+  flex-shrink: 0;
+}
+
+.editor-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.editor-tabbar {
+  display: flex;
+  overflow-x: auto;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.editor-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-family: var(--font-term);
+  font-size: 12px;
+  color: var(--fg-dim);
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.editor-tab.active { color: var(--fg); background: var(--bg-primary); }
+.editor-tab:hover  { color: var(--fg); }
+
+.editor-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-amber);
+  visibility: hidden;
+  flex-shrink: 0;
+}
+.editor-tab-dot.visible { visibility: visible; }
+
+.editor-tab-close {
+  opacity: 0.5;
+  font-family: var(--font-term);
+  padding: 0 2px;
+}
+.editor-tab-close:hover { opacity: 1; color: var(--accent-red); }
+
+.editor-panes {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+}
+
+.editor-pane-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.editor-pane-wrap.hidden { display: none; }
+
+.editor-cm-mount {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.editor-cm-mount .cm-editor {
+  height: 100%;
+}
+
+.editor-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-dim);
+  font-family: var(--font-hud);
+  font-size: 13px;
+}
+
+/* Git gutter markers inside the CodeMirror gutter column */
+.editor-cm-git-gutter {
+  width: 4px;
+  padding: 0 !important;
+}
+.editor-cm-gutter-mark {
+  display: block;
+  width: 3px;
+  height: 100%;
+  position: relative;
+}
+.editor-cm-gutter-added    { background: var(--accent-lime); }
+.editor-cm-gutter-modified { background: var(--accent-amber); }
+.editor-cm-gutter-removed::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -2px;
+  width: 3px;
+  height: 4px;
+  background: var(--accent-red);
+}
+
+.editor-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--accent-red) 8%, var(--bg-secondary));
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-hud);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.editor-confirm-msg { color: var(--fg); flex: 1; }
+
 .rv-spacer { height: 6px; }
