@@ -171,6 +171,8 @@ const T = {
     editor_close_save:     "Save & close",
     editor_close_discard:  "Discard & close",
     no_file_open:          "No file open — pick one from the tree on the left",
+    editor_peek_title:     "Previous content",
+    editor_peek_no_previous: "New lines — no previous content",
   },
   es: {
     // Settings modal
@@ -342,6 +344,8 @@ const T = {
     editor_close_save:     "Guardar y cerrar",
     editor_close_discard:  "Descartar y cerrar",
     no_file_open:          "Ningún archivo abierto — elegí uno del árbol de la izquierda",
+    editor_peek_title:     "Contenido anterior",
+    editor_peek_no_previous: "Líneas nuevas — sin contenido anterior",
   },
 } as const;
 

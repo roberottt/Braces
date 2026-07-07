@@ -3222,14 +3222,16 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   font-size: 13px;
 }
 
-/* Git gutter markers inside the CodeMirror gutter column */
+/* Git gutter markers inside the CodeMirror gutter column.
+   The column is wider than the 3px bar so the click target is hittable. */
 .editor-cm-git-gutter {
-  width: 4px;
+  width: 10px;
   padding: 0 !important;
 }
 .editor-cm-gutter-mark {
   display: block;
   width: 3px;
+  margin-left: 3px;
   height: 100%;
   position: relative;
 }
@@ -3243,6 +3245,65 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   width: 3px;
   height: 4px;
   background: var(--accent-red);
+}
+.editor-cm-git-gutter .cm-gutterElement:has(.editor-cm-gutter-mark) {
+  cursor: pointer;
+}
+.editor-cm-git-gutter .cm-gutterElement:hover .editor-cm-gutter-mark {
+  width: 5px;
+  margin-left: 2px;
+}
+
+/* Inline peek showing the HEAD version of a changed region (click on gutter bar) */
+.editor-peek {
+  margin: 2px 0 2px 8px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-amber);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+.editor-peek-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-hud);
+  font-size: 11px;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.editor-peek-close {
+  background: none;
+  border: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.editor-peek-close:hover { color: var(--fg); }
+.editor-peek-body {
+  padding: 4px 0;
+  max-height: 220px;
+  overflow: auto;
+}
+.editor-peek-line {
+  font-family: var(--font-term);
+  font-size: inherit;
+  padding: 0 8px;
+  white-space: pre;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--accent-red) 10%, transparent);
+}
+.editor-peek-empty {
+  font-family: var(--font-hud);
+  font-size: 12px;
+  padding: 2px 8px;
+  color: var(--fg-dim);
+  font-style: italic;
 }
 
 .editor-confirm {
