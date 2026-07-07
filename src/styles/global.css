@@ -402,6 +402,18 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   animation: cmd-pulse 1.2s ease-in-out infinite;
 }
 
+.cmd-block-stop {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--fg-dim);
+  cursor: pointer;
+  font-size: 9px;
+  padding: 1px 5px;
+  line-height: 1.4;
+}
+.cmd-block-stop:hover { color: var(--accent-red); border-color: currentColor; }
+
 @keyframes cmd-pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.25; }

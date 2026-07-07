@@ -249,6 +249,16 @@ const WarpTerminal: Component<Props> = (props) => {
   let uiFlipTimer: ReturnType<typeof setTimeout> | undefined;
   const [interactiveCmd, setInteractiveCmd] = createSignal("");
   const [blocks, setBlocks] = createSignal<CommandBlock[]>([]);
+  // True while the shell emits the [CWD:…] prompt marker (zsh/bash/pwsh/cmd) —
+  // the only shells where we can tell that a running block has finished, which
+  // stdin-mode below depends on to ever release the input again.
+  const [shellHasMarker, setShellHasMarker] = createSignal(false);
+  const hasRunningBlock = createMemo(() => blocks().some(b => !b.done));
+  // A command is still running in this tab: the input bar stops being a prompt
+  // and becomes the command's stdin (like Warp), so long-running programs
+  // (dev servers, watchers) visibly "own" the terminal until they exit or the
+  // user interrupts them with Ctrl+C.
+  const stdinMode = () => shellHasMarker() && hasRunningBlock() && !isInteractive();
 
   // Persist blocks to SQLite. Saves ALL blocks with a command — NOT just the ones
   // marked done. Some shells never emit the prompt marker that fires closeBlock(),
@@ -550,6 +560,15 @@ const WarpTerminal: Component<Props> = (props) => {
   };
 
   const submitCmd = () => {
+    // Stdin mode: the line goes verbatim (untrimmed) to the running command,
+    // no new block, no history entry — it's program input, not a command.
+    if (stdinMode()) {
+      const line = cmdText();
+      setCmdText("");
+      sendRaw(line + "\r");
+      return;
+    }
+
     const raw = cmdText().trim();
     setCmdText("");
     if (raw) {
@@ -1038,6 +1057,30 @@ const WarpTerminal: Component<Props> = (props) => {
       if (e.ctrlKey && e.shiftKey && e.key === "A") { e.preventDefault(); setStore("sidePanelOpen", v => !v); }
       if (e.ctrlKey && e.shiftKey && e.key === "M") { e.preventDefault(); setStore("metricsOpen", v => !v); }
 
+      // Ctrl+C pressed with focus anywhere else in the window interrupts the
+      // running command. The WIB input and xterm already forward their own
+      // Ctrl+C when focused, but focus routinely ends up elsewhere — e.g. after
+      // clicking block output to read logs, or coming back to Braces after
+      // `pnpm tauri dev` opened its app window — and the keystroke was silently
+      // lost. Editable elements keep their own Ctrl+C (WIB/xterm forward it to
+      // the PTY themselves; typing in the AI panel must not interrupt anything),
+      // and a non-empty text selection still means "copy".
+      if (
+        e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey &&
+        e.key.toLowerCase() === "c" && hasRunningBlock()
+      ) {
+        const el = document.activeElement;
+        const editable =
+          el instanceof HTMLInputElement ||
+          el instanceof HTMLTextAreaElement ||
+          (el instanceof HTMLElement && el.isContentEditable);
+        if (!editable && (window.getSelection()?.isCollapsed ?? true)) {
+          e.preventDefault();
+          sendRaw("\x03");
+          return;
+        }
+      }
+
       if (isInteractive()) return;
       if (e.ctrlKey && e.key === "r" && !e.shiftKey) { e.preventDefault(); setStore("historySearchOpen", v => !v); }
       if (e.ctrlKey && e.key === "f" && store.errorFix) {
@@ -1093,6 +1136,9 @@ const WarpTerminal: Component<Props> = (props) => {
 
       const shellType: string = await invoke("pty_shell_type", { tabId: props.tabId });
       const init = getShellInitScript(shellType);
+      // Marker support == the init script exists for this shell; without it
+      // blocks can never be detected as finished, so stdin-mode stays off.
+      setShellHasMarker(!!init);
       if (init) setTimeout(() => sendRaw(init), 400);
 
       inputRef?.focus();
@@ -1181,6 +1227,11 @@ const WarpTerminal: Component<Props> = (props) => {
                     </Show>
                     <Show when={!block().done}>
                       <span class="cmd-block-spinner">●</span>
+                      <button
+                        class="cmd-block-stop"
+                        title={t(store.language, "stop_cmd_tip")}
+                        onClick={() => sendRaw("\x03")}
+                      >■</button>
                     </Show>
                   </div>
                   <div class="cmd-block-cmd">
@@ -1402,7 +1453,11 @@ const WarpTerminal: Component<Props> = (props) => {
                 onInput={e => { setCmdText(e.currentTarget.value); setShowHistPanel(false); setShowTabPanel(false); setTabCompletions([]); requestAnimationFrame(syncScroll); }}
                 onScroll={syncScroll}
                 onKeyDown={handleKeyDown}
-                placeholder={ptyReady() ? t(store.language, "run_commands_ph") : t(store.language, "connecting_ph")}
+                placeholder={
+                  !ptyReady() ? t(store.language, "connecting_ph")
+                  : stdinMode() ? t(store.language, "running_stdin_ph")
+                  : t(store.language, "run_commands_ph")
+                }
                 disabled={!ptyReady()}
                 autocomplete="off"
                 spellcheck={false}

@@ -95,7 +95,70 @@ impl PtySession {
     }
 
     pub fn kill(&self) -> Result<(), PtyError> {
+        // SIGKILL-ing only the shell leaks its foreground job: a dev server or
+        // the app spawned by `pnpm tauri dev` survives, keeps its port, and the
+        // next run fails with "port already in use". Sweep descendants first.
+        if let Some(root) = self.child.lock().unwrap().process_id() {
+            kill_descendants(root);
+        }
         self.child.lock().unwrap().kill().map_err(|e| PtyError::Pty(e.to_string()))
+    }
+}
+
+/// Kill every process whose ancestry chain leads to `root` (but not `root`
+/// itself — portable-pty's `Child::kill` handles that one).
+fn kill_descendants(root: u32) {
+    use sysinfo::{Pid, ProcessesToUpdate, System};
+    let mut sys = System::new();
+    sys.refresh_processes(ProcessesToUpdate::All, true);
+    let mut family = vec![Pid::from_u32(root)];
+    let mut i = 0;
+    while i < family.len() {
+        let parent = family[i];
+        for (pid, proc_) in sys.processes() {
+            if proc_.parent() == Some(parent) && !family.contains(pid) {
+                family.push(*pid);
+            }
+        }
+        i += 1;
+    }
+    for pid in family.iter().skip(1) {
+        if let Some(p) = sys.process(*pid) {
+            p.kill();
+        }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::process::Command;
+    use std::{thread, time::Duration};
+
+    #[test]
+    fn kill_descendants_sweeps_the_whole_tree() {
+        // sh with one backgrounded and one foreground sleep — the layout a shell
+        // has while running a dev server.
+        let mut sh = Command::new("/bin/sh")
+            .args(["-c", "sleep 300 & sleep 300"])
+            .spawn()
+            .expect("spawn sh");
+        thread::sleep(Duration::from_millis(400));
+
+        kill_descendants(sh.id());
+        thread::sleep(Duration::from_millis(400));
+
+        let ps = Command::new("ps").args(["-axo", "ppid,command"]).output().expect("ps");
+        let survivors = String::from_utf8_lossy(&ps.stdout)
+            .lines()
+            .filter(|l| {
+                let mut it = l.split_whitespace();
+                it.next() == Some(&sh.id().to_string()) && l.contains("sleep 300")
+            })
+            .count();
+        let _ = sh.kill();
+        let _ = sh.wait();
+        assert_eq!(survivors, 0, "sleeps under sh must be dead");
     }
 }
 
