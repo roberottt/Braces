@@ -722,9 +722,6 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.wib-exit-ok  { color: var(--accent-lime); }
-.wib-exit-err { color: var(--accent-red); }
-
 /* Input row: chevron + text input */
 .wib-row {
   display: flex;

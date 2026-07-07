@@ -331,7 +331,6 @@ const WarpTerminal: Component<Props> = (props) => {
 
   // Per-tab reactive accessors
   const tabCwd = () => store.tabs.find(t => t.id === props.tabId)?.cwd ?? "~";
-  const tabExitCode = () => store.tabs.find(t => t.id === props.tabId)?.lastExitCode ?? null;
 
   const setTabCwd = (cwdOrFn: string | ((prev: string) => string)) => {
     const current = tabCwd();
@@ -1434,12 +1433,6 @@ const WarpTerminal: Component<Props> = (props) => {
               </svg>
               <span class="wib-cwd">{shortCwd()}</span>
             </span>
-            <Show when={tabExitCode() !== null && tabExitCode() !== 0}>
-              <span class="wib-exit-err">✕ {tabExitCode()}</span>
-            </Show>
-            <Show when={tabExitCode() === 0}>
-              <span class="wib-exit-ok">✓</span>
-            </Show>
             <span class="wib-meta-spacer" />
             <Show when={store.gitIsRepo}>
               <button
