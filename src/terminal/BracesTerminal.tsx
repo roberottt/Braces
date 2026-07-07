@@ -917,6 +917,19 @@ const BracesTerminal: Component<Props> = (props) => {
         sendRaw("\x1b\r");
         return false;
       }
+      // Ctrl+Tab / Ctrl+Shift+Tab: app-level tab switching. xterm would consume it
+      // (stopPropagation via its cancel()), so the window keydown handler in App.tsx
+      // never fires. Returning false makes xterm ignore it and lets it bubble up.
+      if (e.type === "keydown" && e.ctrlKey && !e.altKey && e.key === "Tab") {
+        return false;
+      }
+      // macOS Cmd+←/→ inside Claude Code: jump to start/end of line. The terminal
+      // has no native meaning for Cmd+arrows, so translate to the readline bindings
+      // Claude Code understands (Ctrl+A / Ctrl+E).
+      if (e.type === "keydown" && e.metaKey && !e.ctrlKey && !e.altKey && isClaudeSession()) {
+        if (e.key === "ArrowLeft")  { e.preventDefault(); sendRaw("\x01"); return false; }
+        if (e.key === "ArrowRight") { e.preventDefault(); sendRaw("\x05"); return false; }
+      }
       return true;
     });
 
