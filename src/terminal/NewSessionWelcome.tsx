@@ -1,6 +1,7 @@
 import { Component } from "solid-js";
 import { store } from "../store/terminalStore";
 import { t } from "../i18n";
+import { isMac } from "../platform";
 
 type Props = { cwd: string };
 
@@ -8,7 +9,8 @@ const Key = (p: { k: string }) => <span class="nsw-key">{p.k}</span>;
 
 const NewSessionWelcome: Component<Props> = (props) => {
   const shortcuts = () => [
-    { keys: ["ctrl", "alt", "T"],   desc: t(store.language, "shortcut_new_tab")     },
+    { keys: isMac ? ["⌘", "T"] : ["ctrl", "alt", "T"],
+                                    desc: t(store.language, "shortcut_new_tab")     },
     { keys: ["ctrl", "shift", "A"], desc: t(store.language, "shortcut_ai_panel")    },
     { keys: ["ctrl", "R"],          desc: t(store.language, "shortcut_history")     },
     { keys: ["ctrl", ","],          desc: t(store.language, "shortcut_settings")    },

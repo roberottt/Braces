@@ -2,6 +2,7 @@ import { Component, For, Show, createSignal } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { store, setStore, genTabId, type Tab } from "../store/terminalStore";
 import { t } from "../i18n";
+import { isMac } from "../platform";
 
 
 function shortCwd(cwd: string): string {
@@ -193,7 +194,7 @@ const TabSidebar: Component = () => {
           >{t(store.language, "files_label")}</button>
         </div>
         <div class="tab-sidebar-actions">
-          <button class="tab-sidebar-btn" title={t(store.language, "new_session_tip")} onClick={newTab}>+</button>
+          <button class="tab-sidebar-btn" title={`${t(store.language, "new_session_tip")} [${isMac ? "⌘T" : "Ctrl+Alt+T"}]`} onClick={newTab}>+</button>
           <button class="tab-sidebar-btn" title={t(store.language, "hide_panel")} onClick={() => setStore("tabsSidebarOpen", false)}>‹</button>
         </div>
       </div>

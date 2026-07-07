@@ -14,6 +14,52 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
+            // Replace the default macOS menu: it includes File > Close Window
+            // bound to Cmd+W, which swallows the shortcut before it reaches the
+            // webview and closes the whole window. Rebuild the standard menus
+            // without that item so the frontend can use Cmd+W to close tabs.
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{AboutMetadataBuilder, MenuBuilder, SubmenuBuilder};
+
+                let handle = app.handle();
+                let pkg = handle.package_info();
+                let about = AboutMetadataBuilder::new()
+                    .name(Some(pkg.name.clone()))
+                    .version(Some(pkg.version.to_string()))
+                    .build();
+                let app_menu = SubmenuBuilder::new(handle, pkg.name.clone())
+                    .about(Some(about))
+                    .separator()
+                    .services()
+                    .separator()
+                    .hide()
+                    .hide_others()
+                    .show_all()
+                    .separator()
+                    .quit()
+                    .build()?;
+                let edit_menu = SubmenuBuilder::new(handle, "Edit")
+                    .undo()
+                    .redo()
+                    .separator()
+                    .cut()
+                    .copy()
+                    .paste()
+                    .select_all()
+                    .build()?;
+                let window_menu = SubmenuBuilder::new(handle, "Window")
+                    .minimize()
+                    .maximize()
+                    .separator()
+                    .fullscreen()
+                    .build()?;
+                let menu = MenuBuilder::new(handle)
+                    .items(&[&app_menu, &edit_menu, &window_menu])
+                    .build()?;
+                app.set_menu(menu)?;
+            }
+
             let cfg = config::Config::load().unwrap_or_default();
             app.manage(cfg);
 

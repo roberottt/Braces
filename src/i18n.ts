@@ -41,7 +41,7 @@ const T = {
 
     // TabSidebar
     search_sessions_ph:    "Search sessions…",
-    new_session_tip:       "New session [Ctrl+Alt+T]",
+    new_session_tip:       "New session",
     file_explorer_tip:     "File explorer [Ctrl+Shift+E]",
 
     // StatusBar tooltips
@@ -108,7 +108,7 @@ const T = {
     app_subtitle:          "Braces — AI-Native Terminal",
 
     // App
-    show_sessions_tip:     "Show sessions [Ctrl+Alt+T]",
+    show_sessions_tip:     "Show sessions",
 
     // StatusBar
     ai_panel_tip:          "AI panel [Ctrl+Shift+A]",
@@ -212,7 +212,7 @@ const T = {
 
     // TabSidebar
     search_sessions_ph:    "Buscar sesiones…",
-    new_session_tip:       "Nueva sesión [Ctrl+Alt+T]",
+    new_session_tip:       "Nueva sesión",
     file_explorer_tip:     "Explorador de archivos [Ctrl+Shift+E]",
 
     // StatusBar tooltips
@@ -279,7 +279,7 @@ const T = {
     app_subtitle:          "Braces — Terminal con IA nativa",
 
     // App
-    show_sessions_tip:     "Mostrar sesiones [Ctrl+Alt+T]",
+    show_sessions_tip:     "Mostrar sesiones",
 
     // StatusBar
     ai_panel_tip:          "Panel de IA [Ctrl+Shift+A]",

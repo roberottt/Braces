@@ -16,6 +16,7 @@ import EditorView from "./editor/EditorView";
 import { store, setStore, genTabId } from "./store/terminalStore";
 import { initChats } from "./store/chatStore";
 import { t } from "./i18n";
+import { isMac } from "./platform";
 
 const FIRST_RUN_KEY = "braces_setup_done";
 
@@ -144,8 +145,12 @@ const App: Component = () => {
         e.preventDefault();
         setStore("settingsOpen", v => !v);
       }
-      // Ctrl+Alt+T → new tab (guard e.repeat so holding the key doesn't flood tabs)
-      if (e.ctrlKey && e.altKey && e.key === "t" && !e.repeat) {
+      // Cmd+T (macOS) / Ctrl+Alt+T (elsewhere) → new tab
+      // (guard e.repeat so holding the key doesn't flood tabs)
+      const newTabCombo = isMac
+        ? e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && e.key === "t"
+        : e.ctrlKey && e.altKey && e.key === "t";
+      if (newTabCombo && !e.repeat) {
         e.preventDefault();
         const id = genTabId();
         setStore("tabs", (prev) => [
@@ -155,8 +160,12 @@ const App: Component = () => {
         setStore("activeTabId", id);
         setStore("tabsSidebarOpen", true);
       }
-      // Ctrl+W → close active tab (kept open if it's the last one)
-      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "w" && !e.repeat) {
+      // Cmd+W (macOS) / Ctrl+W (elsewhere) → close active tab
+      // (kept open if it's the last one)
+      const closeTabCombo = isMac
+        ? e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && e.key === "w"
+        : e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "w";
+      if (closeTabCombo && !e.repeat) {
         e.preventDefault();
         if (store.tabs.length > 1) {
           const id = store.activeTabId;
@@ -247,7 +256,7 @@ const App: Component = () => {
           <Show when={!store.tabsSidebarOpen}>
             <button
               class="tab-sidebar-show-btn"
-              title={t(store.language, "show_sessions_tip")}
+              title={`${t(store.language, "show_sessions_tip")} [${isMac ? "⌘T" : "Ctrl+Alt+T"}]`}
               onClick={() => setStore("tabsSidebarOpen", true)}
             >
               ›
