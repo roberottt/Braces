@@ -24,9 +24,11 @@ fn truncate_utf8(s: &str, max_bytes: usize) -> &str {
 async fn exec_in_pty(command: &str, active_tab_id: &str, pty: &PtyState) -> (String, bool) {
     use tokio::time::{sleep, Duration, Instant};
 
-    let before_len = {
+    let (before_len, before_bytes) = {
         let g = pty.0.lock().unwrap();
-        g.get(active_tab_id).map(|s| s.output.len()).unwrap_or(0)
+        g.get(active_tab_id)
+            .map(|s| (s.output.len(), s.output.bytes_seen()))
+            .unwrap_or((0, 0))
     };
 
     // Write to the live terminal — user sees this exactly as if they typed it
@@ -43,26 +45,28 @@ async fn exec_in_pty(command: &str, active_tab_id: &str, pty: &PtyState) -> (Str
         }
     }
 
-    // Quiescence detection: stop when output hasn't changed for 700 ms, or 30 s max
+    // Quiescence detection on the raw byte counter (the line count is static
+    // while the shell is merely repainting its prompt line): stop when nothing
+    // has arrived for 700 ms, or 30 s max.
     let max_wait  = Duration::from_secs(30);
     let quiesce   = Duration::from_millis(700);
     let start     = Instant::now();
     let mut last_change = Instant::now();
-    let mut last_len = before_len;
+    let mut last_bytes = before_bytes;
 
     loop {
         sleep(Duration::from_millis(100)).await;
-        let cur_len = {
+        let cur_bytes = {
             let g = pty.0.lock().unwrap();
-            g.get(active_tab_id).map(|s| s.output.len()).unwrap_or(0)
+            g.get(active_tab_id).map(|s| s.output.bytes_seen()).unwrap_or(0)
         };
-        if cur_len != last_len {
-            last_len = cur_len;
+        if cur_bytes != last_bytes {
+            last_bytes = cur_bytes;
             last_change = Instant::now();
         }
         if start.elapsed() >= max_wait { break; }
-        if cur_len > before_len && last_change.elapsed() >= quiesce { break; }
-        if cur_len == before_len && start.elapsed().as_secs() >= 5 { break; }
+        if cur_bytes > before_bytes && last_change.elapsed() >= quiesce { break; }
+        if cur_bytes == before_bytes && start.elapsed().as_secs() >= 5 { break; }
     }
 
     // Collect and filter new output
@@ -73,11 +77,16 @@ async fn exec_in_pty(command: &str, active_tab_id: &str, pty: &PtyState) -> (Str
             .unwrap_or_default()
     };
 
+    // At write time the shell's prompt is the buffer's pending (unterminated)
+    // line; our Enter completes it, so the FIRST captured line is always the
+    // prompt + echoed command (with any line-editor repaint noise) — drop it.
+    let new_lines = if new_lines.is_empty() { new_lines } else { new_lines[1..].to_vec() };
+
     let cmd_lower = command.trim().to_lowercase();
     let filtered: Vec<&str> = new_lines.iter()
         .filter(|l| {
             let lt = l.trim().to_lowercase();
-            lt != cmd_lower && !is_prompt(l)
+            lt != cmd_lower && !is_prompt(l) && !lt.ends_with(&format!("% {cmd_lower}")) && !lt.ends_with(&format!("$ {cmd_lower}"))
         })
         .map(|l| l.as_str())
         .collect();

@@ -1016,6 +1016,35 @@ const WarpTerminal: Component<Props> = (props) => {
       if (fix) setStore("errorFix", fix.replace(/^FIX:\s*/, "").trim());
     });
 
+    // The AI agent injects its commands straight into this tab's PTY (backend
+    // exec_in_pty). The shell runs them, but block mode discards PTY output when
+    // no block is open — so open one here, exactly like submitCmd does minus the
+    // PTY write. The existing pty-data handler then streams the output into it
+    // and the prompt's OSC 0 marker closes it with the real exit code.
+    const unlistenAgentExec = await listen<Record<string, unknown>>("ai-agent-event", (ev) => {
+      if (store.activeTabId !== props.tabId) return;
+      const evt = ev.payload;
+      if (evt.t !== "exec_start" || typeof evt.cmd !== "string") return;
+      if (isInteractive()) return; // raw xterm already shows injected input as-is
+      if (activeBlockId) return;   // a command is mid-run; don't hijack its block
+      echoFilter = evt.cmd;
+      const block: CommandBlock = {
+        id: Math.random().toString(36).slice(2),
+        cmd: evt.cmd,
+        cwd: tabCwd(),
+        startTime: Date.now(),
+        endTime: null,
+        exitCode: null,
+        htmlOutput: "",
+        done: false,
+      };
+      setBlocks(prev => [...prev, block]);
+      activeBlockId = block.id;
+      activeScreen = mkScreen();
+      followBottom = true;
+      scrollToBottom();
+    });
+
     const ro = new ResizeObserver(() => {
       fitAddon?.fit();
       // Only resize the PTY in interactive mode. In block mode, ConPTY would
@@ -1162,6 +1191,7 @@ const WarpTerminal: Component<Props> = (props) => {
       persistBlocks();
       unlistenPty();
       unlistenAnalysis();
+      unlistenAgentExec();
       ro.disconnect();
       wibRo.disconnect();
       window.removeEventListener("keydown", onGlobalKey);
