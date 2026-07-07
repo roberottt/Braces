@@ -58,7 +58,11 @@ const StatusBar: Component = () => {
         onClick={() => setStore("currentView", (v) => (v === "editor" ? "terminal" : "editor"))}
         title={t(store.language, "editor_view_tip")}
       >
-        ✎
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M4 3L1.5 6L4 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M8 3l2.5 3L8 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M6.8 2.2L5.2 9.8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" />
+        </svg>
       </span>
       <span
         class="sb-item sb-icon"
