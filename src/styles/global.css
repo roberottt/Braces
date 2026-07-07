@@ -2044,12 +2044,23 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
 .history-overlay .ho-item.selected { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--fg); }
 
 /* ── Settings gear button ────────────────────────────────────────────────── */
-.sb-settings {
-  font-size: 14px;
+.status-bar .sb-item.sb-icon.sb-settings {
+  width: 22px;
+  height: 22px;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--bg-secondary);
+  font-size: 17px;
   line-height: 1;
-  transition: color 0.15s, text-shadow 0.15s;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent);
+  transition: background 0.15s, box-shadow 0.15s;
 }
-.sb-settings:hover { color: var(--accent) !important; }
+.status-bar .sb-item.sb-icon.sb-settings:hover,
+.status-bar .sb-item.sb-icon.sb-settings.open {
+  background: color-mix(in srgb, var(--accent) 82%, var(--fg));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 70%, transparent);
+}
 
 /* ── Settings modal ──────────────────────────────────────────────────────── */
 .settings-overlay {

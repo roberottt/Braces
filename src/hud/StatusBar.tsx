@@ -99,7 +99,8 @@ const StatusBar: Component = () => {
       {/* Settings */}
       <span
         class="sb-item sb-icon sb-settings"
-        style={{ cursor: "pointer", color: store.settingsOpen ? "var(--accent)" : "var(--fg-dim)" }}
+        classList={{ open: store.settingsOpen }}
+        style={{ cursor: "pointer" }}
         onClick={() => setStore("settingsOpen", v => !v)}
         title={t(store.language, "settings_tip")}
       >
