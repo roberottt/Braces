@@ -7,8 +7,6 @@ type Metrics = { cpu_percent: number; ram_used_mb: number; ram_total_mb: number 
 
 const MetricsOverlay: Component = () => {
   const [metrics, setMetrics] = createSignal<Metrics>({ cpu_percent: 0, ram_used_mb: 0, ram_total_mb: 8192 });
-  const [query, setQuery] = createSignal("");
-  const [queryResult, setQueryResult] = createSignal("");
   let timer: ReturnType<typeof setInterval>;
 
   onMount(() => {
@@ -18,18 +16,6 @@ const MetricsOverlay: Component = () => {
   });
 
   onCleanup(() => clearInterval(timer));
-
-  const askProcesses = async () => {
-    const q = query().trim();
-    if (!q) return;
-    setQueryResult("…");
-    try {
-      const r = await invoke<string>("ai_query_processes", { query: q });
-      setQueryResult(r);
-    } catch (e) {
-      setQueryResult(String(e));
-    }
-  };
 
   const ramPct = () => {
     const m = metrics();
@@ -67,21 +53,6 @@ const MetricsOverlay: Component = () => {
         <div class="mo-bar" style={{ width: `${ramPct().toFixed(1)}%` }} />
       </div>
 
-      {queryResult() && (
-        <div style={{ padding: "6px 10px", color: "var(--fg)", "font-size": "11px", "white-space": "pre-wrap" }}>
-          {queryResult()}
-        </div>
-      )}
-
-      <div class="mo-query-row">
-        <input
-          class="mo-query-input"
-          placeholder={t(store.language, "ram_query_ph")}
-          value={query()}
-          onInput={(e) => setQuery(e.currentTarget.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") askProcesses(); }}
-        />
-      </div>
     </div>
   );
 };

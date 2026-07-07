@@ -139,7 +139,6 @@ const T = {
 
     // Metrics overlay
     system_label:          "SYSTEM",
-    ram_query_ph:          "what's eating my RAM?",
 
     // History overlay
     semantic_history:      "SEMANTIC HISTORY",
@@ -312,7 +311,6 @@ const T = {
 
     // Metrics overlay
     system_label:          "SISTEMA",
-    ram_query_ph:          "¿qué consume mi RAM?",
 
     // History overlay
     semantic_history:      "HISTORIAL SEMÁNTICO",
