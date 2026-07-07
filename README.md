@@ -30,6 +30,12 @@ On top of that, a built-in AI panel can explain errors, suggest fixes, run comma
 
 Works on **Windows, macOS, and Linux**.
 
+<p align="center">
+  <img src="public/braces_image.png" alt="Braces terminal screenshot" width="800" />
+</p>
+
+<p align="center"><em>This is what Braces looks like — and it comes with 5 different themes to match your style.</em></p>
+
 ---
 
 ## Highlights
