@@ -166,7 +166,7 @@ function isInteractiveCommand(raw: string): boolean {
 
 type Props = { tabId: string };
 
-const WarpTerminal: Component<Props> = (props) => {
+const BracesTerminal: Component<Props> = (props) => {
   let outputRef!: HTMLDivElement;
   let blocksRef!: HTMLDivElement;
   let wibContainerRef!: HTMLDivElement;
@@ -294,7 +294,7 @@ const WarpTerminal: Component<Props> = (props) => {
     saveBlocksTimer = setTimeout(persistBlocks, 500);
   });
 
-  // Claude Code runs directly in xterm (like Warp) — no separate composer.
+  // Claude Code runs directly in xterm — no separate composer.
   // This flag only gates the two extras layered on top of plain TUI passthrough:
   // Shift+Enter → newline, and image paste → temp file + pasted path.
   const isClaudeSession = () =>
@@ -302,7 +302,7 @@ const WarpTerminal: Component<Props> = (props) => {
 
   // Image paste during a Claude session: save the clipboard image to a temp file
   // and paste its path (bracketed, so it lands in the input instead of submitting).
-  // Claude Code picks the path up as an attachment — same mechanism Warp uses.
+  // Claude Code picks the path up as an attachment.
   // Text-only pastes fall through to xterm's native paste handling.
   const handleXtermPaste = (e: ClipboardEvent) => {
     if (!isClaudeSession()) return;
@@ -562,7 +562,7 @@ const WarpTerminal: Component<Props> = (props) => {
       lastPtyRows = BLOCK_ROWS;
       invoke("pty_resize", { tabId: props.tabId, cols: term.cols, rows: BLOCK_ROWS }).catch(() => {});
     }
-    // Reveal whatever grew in the now-hidden block while .warp-blocks was frozen
+    // Reveal whatever grew in the now-hidden block while .braces-blocks was frozen
     // (pointer-events: none + visibility: hidden for the whole interactive session).
     if (followBottom) scrollToBottom();
     setTimeout(() => { inputRef?.focus(); }, 32);
@@ -1203,10 +1203,10 @@ const WarpTerminal: Component<Props> = (props) => {
   });
 
   return (
-    <div class={`warp-terminal${uiInteractive() ? " interactive" : ""}`}>
+    <div class={`braces-terminal${uiInteractive() ? " interactive" : ""}`}>
 
-      <div class="warp-main">
-        <div class="warp-blocks" ref={blocksRef!} onWheel={(e) => {
+      <div class="braces-main">
+        <div class="braces-blocks" ref={blocksRef!} onWheel={(e) => {
           // Explicit upward wheel/trackpad = the user wants to read history:
           // detach from the bottom. This is the ONLY thing that detaches.
           if (e.deltaY < 0) followBottom = false;
@@ -1280,13 +1280,13 @@ const WarpTerminal: Component<Props> = (props) => {
           <div class="wib-spacer" ref={wibSpacerRef!} aria-hidden="true" />
         </div>
 
-        <div ref={outputRef} class="warp-output" />
+        <div ref={outputRef} class="braces-output" />
       </div>
 
       {/* Slim status footer for Claude Code sessions. The regular input bar
           (which carries the branch/changes pills) is hidden for the whole
           interactive session, so without this the user loses all git context
-          while Claude edits files. Rendered as a flex sibling of .warp-main so
+          while Claude edits files. Rendered as a flex sibling of .braces-main so
           it takes real height — the ResizeObserver refits xterm automatically. */}
       <Show when={uiInteractive() && isClaudeSession()}>
         <div class="claude-bar">
@@ -1496,4 +1496,4 @@ const WarpTerminal: Component<Props> = (props) => {
   );
 };
 
-export default WarpTerminal;
+export default BracesTerminal;

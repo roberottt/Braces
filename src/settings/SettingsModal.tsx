@@ -9,7 +9,7 @@ const THEMES = [
   { id: "neon-noir",      label: "Anakin",         accent: "#8aa0ff" },
   { id: "akira",          label: "Mace Windu",     accent: "#9a78d4" },
   { id: "ghost-protocol", label: "Yoda",           accent: "#72aa50" },
-  { id: "time-warp",      label: "C-3PO",          accent: "#c08840" },
+  { id: "c3po",      label: "C-3PO",          accent: "#c08840" },
   { id: "minimal",        label: "Stormtrooper",   accent: "#cccccc" },
 ] as const;
 

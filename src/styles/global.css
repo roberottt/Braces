@@ -1,7 +1,7 @@
 /* NeOSH — global styles */
 
 /* ── Fonts (bundled, offline) ─────────────────────────────────────────────── */
-/* Hack — the same monospace Warp ships with by default. */
+/* Hack — default monospace font. */
 @font-face {
   font-family: "Hack";
   font-style: normal;
@@ -34,7 +34,7 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
 :root,
 [data-theme="neon-noir"],
 [data-theme="graphite"] {
-  --bg-primary:   #000000;   /* terminal area — pure black (Warp) */
+  --bg-primary:   #000000;   /* terminal area — pure black */
   --bg-secondary: #0a0a0c;   /* top bar, input bars */
   --bg-panel:     #070709;   /* side panels & tab sidebar */
   --bg-tertiary:  #161619;   /* hover surfaces */
@@ -82,7 +82,7 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   --accent-amber:#90b870;
 }
 
-[data-theme="time-warp"] {
+[data-theme="c3po"] {
   --accent:     #c08840;   /* warm brass amber */
   --accent-2:   #e0b070;
   --accent-hover:#d4a860;
@@ -155,7 +155,7 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   background: var(--accent);
 }
 
-/* ── Window controls (Warp-style, integrated title bar) ──────────────────── */
+/* ── Window controls (integrated title bar) ──────────────────── */
 .status-bar .win-controls {
   display: flex;
   align-items: stretch;
@@ -210,8 +210,8 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   position: relative;
 }
 
-/* ── Warp-style terminal ─────────────────────────────────────────────────── */
-.warp-terminal {
+/* ── Braces terminal ──────────────────────────────────────────────────────── */
+.braces-terminal {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -221,8 +221,8 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
 }
 
 /* Container that holds both the blocks area and xterm (they overlap via absolute).
-   Fills all of .warp-terminal — .wib is now an overlay so it never steals height. */
-.warp-main {
+   Fills all of .braces-terminal — .wib is now an overlay so it never steals height. */
+.braces-main {
   flex: 1;
   min-height: 0;
   position: relative;
@@ -236,7 +236,7 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
    scrollHeight for flex layouts, which let content slide behind the input
    bar before the container ever became scrollable. A real child element is
    counted by every engine. */
-.warp-blocks {
+.braces-blocks {
   position: absolute;
   inset: 0;
   overflow-y: auto;
@@ -249,15 +249,15 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
 }
 
 /* Height is kept in sync with the input bar's real height by a ResizeObserver
-   (see WarpTerminal); 110px is the pre-measurement fallback. */
+   (see BracesTerminal); 110px is the pre-measurement fallback. */
 .wib-spacer {
   flex-shrink: 0;
   height: 110px;
 }
 
-/* xterm container — always occupies full warp-main for correct sizing.
+/* xterm container — always occupies full braces-main for correct sizing.
    Invisible in normal mode; visible + on top in interactive mode. */
-.warp-output {
+.braces-output {
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -265,25 +265,25 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   pointer-events: none;
 }
 
-.warp-output .xterm {
+.braces-output .xterm {
   height: 100%;
   padding: 6px 8px 4px;
 }
 
-.warp-terminal.interactive .warp-blocks {
+.braces-terminal.interactive .braces-blocks {
   pointer-events: none;
   visibility: hidden;
 }
 
-.warp-terminal.interactive .warp-output {
+.braces-terminal.interactive .braces-output {
   z-index: 2;
   opacity: 1;
   pointer-events: auto;
 }
 
 /* Input bar stays mounted in interactive mode (its ResizeObserver must keep a
-   live node — see WarpTerminal) but is invisible and click-through. */
-.warp-terminal.interactive .wib-container {
+   live node — see BracesTerminal) but is invisible and click-through. */
+.braces-terminal.interactive .wib-container {
   visibility: hidden;
   pointer-events: none;
 }
@@ -303,7 +303,7 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   font-size: 10px;
   color: var(--fg-dim);
   user-select: none;
-  z-index: 3; /* above .warp-output (z-index: 2 in interactive mode) */
+  z-index: 3; /* above .braces-output (z-index: 2 in interactive mode) */
 }
 
 .claude-bar-brand {
@@ -657,7 +657,7 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   text-overflow: ellipsis;
 }
 
-/* ── Warp input bar (wib) ────────────────────────────────────────────────── */
+/* ── Braces input bar (wib) ───────────────────────────────────────────────── */
 /* wib-container is absolutely positioned at bottom; panel + wib stack inside it. */
 .wib-container {
   position: absolute;
@@ -701,7 +701,7 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   user-select: none;
 }
 
-/* Path shown as a Warp-style pill: folder icon + cwd in a rounded chip */
+/* Path shown as a pill: folder icon + cwd in a rounded chip */
 .wib-cwd-pill {
   display: inline-flex;
   align-items: center;

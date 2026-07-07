@@ -19,7 +19,7 @@ const OnboardingWizard: Component<Props> = (props) => {
     { id: "neon-noir",      label: "Anakin" },
     { id: "akira",          label: "Mace Windu" },
     { id: "ghost-protocol", label: "Yoda" },
-    { id: "time-warp",      label: "C-3PO" },
+    { id: "c3po",      label: "C-3PO" },
     { id: "minimal",        label: "Stormtrooper" },
   ];
   const [theme, setTheme] = createSignal("neon-noir");

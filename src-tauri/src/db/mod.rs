@@ -72,7 +72,7 @@ pub struct TabRecord {
     pub last_exit_code: Option<i64>,
 }
 
-/// Mirrors CommandBlock in WarpTerminal.tsx
+/// Mirrors CommandBlock in BracesTerminal.tsx
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockRecord {

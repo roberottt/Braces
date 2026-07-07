@@ -1,6 +1,6 @@
 import { Component, For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
-import WarpTerminal from "./terminal/WarpTerminal";
+import BracesTerminal from "./terminal/BracesTerminal";
 import HistoryOverlay from "./terminal/HistoryOverlay";
 import StatusBar from "./hud/StatusBar";
 import AiSidePanel from "./hud/AiSidePanel";
@@ -45,7 +45,7 @@ const App: Component = () => {
   // Reactive refresh on cwd change (e.g. after cd).
   createEffect(() => { refreshGit(store.cwd); });
 
-  // Event-driven refresh: fired by WarpTerminal after every command.
+  // Event-driven refresh: fired by BracesTerminal after every command.
   onMount(() => {
     const handler = (e: Event) => {
       const cwd = (e as CustomEvent<{ cwd: string }>).detail?.cwd ?? store.cwd;
@@ -123,13 +123,16 @@ const App: Component = () => {
       const model    = localStorage.getItem("braces_model")
                     ?? cfg.providers[cfg.ai.primary]?.model
                     ?? "";
-      const theme    = localStorage.getItem("braces_theme")    ?? cfg.visual.theme;
+      // "time-warp" is the pre-rename id of the c3po theme; migrate stored values.
+      const rawTheme = localStorage.getItem("braces_theme")    ?? cfg.visual.theme;
+      const theme    = rawTheme === "time-warp" ? "c3po" : rawTheme;
       setStore("provider", provider);
       setStore("model", model);
       setStore("theme", theme);
       document.documentElement.setAttribute("data-theme", theme);
     } catch {
-      const theme = localStorage.getItem("braces_theme");
+      const rawTheme = localStorage.getItem("braces_theme");
+      const theme = rawTheme === "time-warp" ? "c3po" : rawTheme;
       if (theme) {
         setStore("theme", theme);
         document.documentElement.setAttribute("data-theme", theme);
@@ -273,7 +276,7 @@ const App: Component = () => {
                     class="tab-panel"
                     classList={{ hidden: tab.id !== store.activeTabId }}
                   >
-                    <WarpTerminal tabId={tab.id} />
+                    <BracesTerminal tabId={tab.id} />
                     <Show when={tab.id === store.activeTabId}>
                       <ErrorPanel />
                       <Show when={store.historySearchOpen}>

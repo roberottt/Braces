@@ -28,5 +28,5 @@ model = "grok-3"
 model = "gemini-2.0-flash"
 
 [visual]
-theme   = "neon-noir"    # neon-noir | akira | ghost-protocol | time-warp | minimal
+theme   = "neon-noir"    # neon-noir | akira | ghost-protocol | c3po | minimal
 effects = true           # set false or use --no-gpu flag to disable WebGL

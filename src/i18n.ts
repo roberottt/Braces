@@ -148,7 +148,7 @@ const T = {
     binary_file:           "Binary file modified",
     no_changes_diff:       "No changes to show",
 
-    // WarpTerminal panels
+    // BracesTerminal panels
     branches_panel:        "BRANCHES",
     branch_hint:           "↵ switch  ·  esc close",
     completions_panel:     "COMPLETIONS",
@@ -320,7 +320,7 @@ const T = {
     binary_file:           "Archivo binario modificado",
     no_changes_diff:       "Sin cambios para mostrar",
 
-    // WarpTerminal panels
+    // BracesTerminal panels
     branches_panel:        "RAMAS",
     branch_hint:           "↵ cambiar  ·  esc cerrar",
     completions_panel:     "COMPLETADOS",

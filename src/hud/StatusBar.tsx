@@ -107,7 +107,7 @@ const StatusBar: Component = () => {
         ⚙
       </span>
 
-      {/* Window controls (Warp-style, integrated in the bar) */}
+      {/* Window controls (integrated in the bar) */}
       <div class="win-controls">
         <button
           class="win-btn"

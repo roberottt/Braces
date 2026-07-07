@@ -1,4 +1,4 @@
-/** Graphite palette — matches NEON_NOIR_THEME in WarpTerminal */
+/** Graphite palette — matches NEON_NOIR_THEME in BracesTerminal */
 const PAL = [
   '#000000','#f0726f','#6fcf97','#e0b07a',
   '#8aa0ff','#b08af0','#7fd6d0','#e6e7ea',

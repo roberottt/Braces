@@ -46,7 +46,7 @@ const XTERM_THEMES: Record<string, typeof NEON_NOIR_THEME> = {
   "neon-noir": NEON_NOIR_THEME,
   "ghost-protocol": { ...NEON_NOIR_THEME, background: "#000000", cursor: "#c8ff00", green: "#c8ff00", cyan: "#88ff00" },
   "akira":          { ...NEON_NOIR_THEME, background: "#050505", cursor: "#ff00aa", magenta: "#ff00aa" },
-  "time-warp":      { ...NEON_NOIR_THEME, background: "#111111", cursor: "#ff9a3c", yellow: "#ff9a3c" },
+  "c3po":      { ...NEON_NOIR_THEME, background: "#111111", cursor: "#ff9a3c", yellow: "#ff9a3c" },
   "minimal":        { ...NEON_NOIR_THEME, background: "#1a1a1a", cursor: "#ffffff", foreground: "#dddddd" },
 };
 

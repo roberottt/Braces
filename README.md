@@ -80,7 +80,7 @@ The input bar colorizes as you type: sub-commands, flags, strings, and operators
 
 ### Claude Code integration
 
-Running `npx claude` or `claude` inside the terminal keeps Claude Code fully inline in the terminal — you type straight into Claude's own input, like in Warp:
+Running `npx claude` or `claude` inside the terminal keeps Claude Code fully inline in the terminal — you type straight into Claude's own input:
 
 - **`Shift+Enter` for newlines** — translated to Claude Code's insert-newline binding
 - **Image paste** — paste clipboard images directly; they are saved to temp files and their path is pasted so Claude attaches them
@@ -164,7 +164,7 @@ Five accent-color themes (the background stays pure black — `#000` — always)
 | Graphite *(default)* | Blue-indigo `#8aa0ff` |
 | Akira | Crimson `#c45272` |
 | Ghost Protocol | Olive green `#72aa50` |
-| Time Warp | Amber `#c08840` |
+| C-3PO | Amber `#c08840` |
 | Minimal | Light gray `#cccccc` |
 
 ### Session persistence
@@ -248,7 +248,7 @@ terminal/
 ├── src/                        # SolidJS frontend
 │   ├── App.tsx                 # Root — layout, shortcuts, git polling
 │   ├── terminal/
-│   │   ├── WarpTerminal.tsx    # Block renderer + PTY client + input bar
+│   │   ├── BracesTerminal.tsx    # Block renderer + PTY client + input bar
 │   │   ├── HistoryOverlay.tsx  # Ctrl+R search overlay
 │   │   └── shellInit.ts        # Shell-specific init scripts (OSC 7 prompt)
 │   ├── editor/

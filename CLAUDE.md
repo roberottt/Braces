@@ -35,9 +35,9 @@ The app has two distinct layers that communicate via Tauri's `invoke()` IPC brid
 - **SolidJS** with reactive primitives (`createSignal`, `createEffect`, `createStore`)
 - **Global state** lives in `src/store/terminalStore.ts` (single `[store, setStore]` pair covering tabs, git status, panel visibility, theme, provider) and `src/store/chatStore.ts` (multi-chat AI conversations)
 - `src/App.tsx` is the root — registers all global keyboard shortcuts, polls git status every 2s, and persists tabs to SQLite
-- `src/terminal/WarpTerminal.tsx` is the core terminal component: block renderer + PTY client + input bar + interactive xterm.js fallback
+- `src/terminal/BracesTerminal.tsx` is the core terminal component: block renderer + PTY client + input bar + interactive xterm.js fallback
 - `src/hud/` contains all overlay panels (AI side panel, Git panel, Workspace file explorer, Code Review, Metrics, Status bar, Tab sidebar)
-- Themes are applied by setting `data-theme` on `<html>` (values: `neon-noir`, `akira`, `ghost-protocol`, `time-warp`, `minimal`)
+- Themes are applied by setting `data-theme` on `<html>` (values: `neon-noir`, `akira`, `ghost-protocol`, `c3po`, `minimal`)
 - i18n strings are in `src/i18n.ts`; language is `"es"` (default) or `"en"`, stored in `localStorage` as `braces_language`
 
 ### Backend (`src-tauri/src/`)
@@ -59,11 +59,11 @@ The app has two distinct layers that communicate via Tauri's `invoke()` IPC brid
 
 ### Interactive mode detection
 
-`WarpTerminal` switches from block UI to raw xterm.js when the running process is a known TUI program (vim, tmux, ssh, fzf, etc.) or a REPL launched without arguments. When the program exits, block mode resumes.
+`BracesTerminal` switches from block UI to raw xterm.js when the running process is a known TUI program (vim, tmux, ssh, fzf, etc.) or a REPL launched without arguments. When the program exits, block mode resumes.
 
 ### Claude Code sessions
 
-When `claude` or `npx claude` runs inside the terminal it stays in raw xterm.js mode like any other TUI (no separate input box — same as Warp). Two extras are layered on top of plain passthrough: Shift+Enter is translated to ESC+CR (Claude Code's insert-newline binding), and pasting an image saves it to a temp file and pastes the path so Claude Code attaches it.
+When `claude` or `npx claude` runs inside the terminal it stays in raw xterm.js mode like any other TUI (no separate input box). Two extras are layered on top of plain passthrough: Shift+Enter is translated to ESC+CR (Claude Code's insert-newline binding), and pasting an image saves it to a temp file and pastes the path so Claude Code attaches it.
 
 ## Key localStorage keys
 
