@@ -16,6 +16,12 @@
 
 ---
 
+## Why Braces?
+
+I built Braces because I wanted a terminal experience like Warp's — command blocks, an AI agent, a modern feel — but without being tied to a specific machine. Warp relies on GPU acceleration, which means it doesn't run well (or at all) on older hardware, low-power devices, or remote/VM setups without a GPU. Braces is built to deliver that same experience anywhere, on any computer, with no GPU acceleration required.
+
+---
+
 ## What is Braces?
 
 Braces is a modern terminal where each command you run appears as its own card — with exit status, elapsed time, and clean colored output. No more scrolling through a wall of text to find where a command started or whether it failed.
