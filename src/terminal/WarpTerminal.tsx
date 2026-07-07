@@ -254,11 +254,21 @@ const WarpTerminal: Component<Props> = (props) => {
   // stdin-mode below depends on to ever release the input again.
   const [shellHasMarker, setShellHasMarker] = createSignal(false);
   const hasRunningBlock = createMemo(() => blocks().some(b => !b.done));
-  // A command is still running in this tab: the input bar stops being a prompt
-  // and becomes the command's stdin (like Warp), so long-running programs
-  // (dev servers, watchers) visibly "own" the terminal until they exit or the
-  // user interrupts them with Ctrl+C.
-  const stdinMode = () => shellHasMarker() && hasRunningBlock() && !isInteractive();
+  // A command is still running in this tab: the input bar is disabled so
+  // long-running programs (dev servers, watchers) visibly "own" the terminal
+  // until they exit or the user interrupts them with Ctrl+C. Gated on
+  // shellHasMarker because without the prompt marker we can never detect the
+  // command finishing, and the input would stay locked forever.
+  const inputLocked = () => shellHasMarker() && hasRunningBlock() && !isInteractive();
+
+  // Disabling the input while a command runs blurs it (focus falls to <body>,
+  // where the global Ctrl+C handler below picks up the interrupt); once the
+  // command ends, hand focus straight back so the user can keep typing.
+  createEffect((prev: boolean | undefined) => {
+    const locked = inputLocked();
+    if (prev && !locked) setTimeout(() => inputRef?.focus(), 0);
+    return locked;
+  });
 
   // Persist blocks to SQLite. Saves ALL blocks with a command — NOT just the ones
   // marked done. Some shells never emit the prompt marker that fires closeBlock(),
@@ -559,15 +569,6 @@ const WarpTerminal: Component<Props> = (props) => {
   };
 
   const submitCmd = () => {
-    // Stdin mode: the line goes verbatim (untrimmed) to the running command,
-    // no new block, no history entry — it's program input, not a command.
-    if (stdinMode()) {
-      const line = cmdText();
-      setCmdText("");
-      sendRaw(line + "\r");
-      return;
-    }
-
     const raw = cmdText().trim();
     setCmdText("");
     if (raw) {
@@ -1478,10 +1479,10 @@ const WarpTerminal: Component<Props> = (props) => {
                 onKeyDown={handleKeyDown}
                 placeholder={
                   !ptyReady() ? t(store.language, "connecting_ph")
-                  : stdinMode() ? t(store.language, "running_stdin_ph")
+                  : inputLocked() ? t(store.language, "running_locked_ph")
                   : t(store.language, "run_commands_ph")
                 }
-                disabled={!ptyReady()}
+                disabled={!ptyReady() || inputLocked()}
                 autocomplete="off"
                 spellcheck={false}
               />

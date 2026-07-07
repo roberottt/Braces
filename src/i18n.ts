@@ -160,7 +160,7 @@ const T = {
     view_changes_tip:      "View changes (Ctrl+Shift+G)",
     run_commands_ph:       "Run commands…",
     connecting_ph:         "Connecting…",
-    running_stdin_ph:      "Command running — typed input goes to it · Ctrl+C to stop",
+    running_locked_ph:     "Command running — Ctrl+C to stop",
     stop_cmd_tip:          "Stop command (Ctrl+C)",
 
     // Editor view
@@ -331,7 +331,7 @@ const T = {
     view_changes_tip:      "Ver cambios (Ctrl+Shift+G)",
     run_commands_ph:       "Ejecutar comandos…",
     connecting_ph:         "Conectando…",
-    running_stdin_ph:      "Comando en ejecución — lo escrito va al comando · Ctrl+C para detener",
+    running_locked_ph:     "Comando en ejecución — Ctrl+C para detener",
     stop_cmd_tip:          "Detener comando (Ctrl+C)",
 
     // Editor view
