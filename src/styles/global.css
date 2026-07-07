@@ -2165,7 +2165,6 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   color: var(--accent);
 }
 
-.slp-flag { font-size: 12px; line-height: 1; }
 .slp-code { font-size: 9px; letter-spacing: 0.08em; }
 
 .settings-close {

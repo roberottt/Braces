@@ -31,9 +31,9 @@ const DEFAULT_MODELS: Partial<Record<Provider, string>> = {
   gemini:    "gemini-2.0-flash",
 };
 
-const LANGS: { id: Lang; flag: string; label: string }[] = [
-  { id: "es", flag: "🇪🇸", label: "Español" },
-  { id: "en", flag: "🇬🇧", label: "English" },
+const LANGS: { id: Lang; label: string }[] = [
+  { id: "es", label: "Español" },
+  { id: "en", label: "English" },
 ];
 
 const SettingsModal: Component = () => {
@@ -116,7 +116,6 @@ const SettingsModal: Component = () => {
                   onClick={() => setLang(l.id)}
                   title={l.label}
                 >
-                  <span class="slp-flag">{l.flag}</span>
                   <span class="slp-code">{l.id.toUpperCase()}</span>
                 </button>
               ))}
