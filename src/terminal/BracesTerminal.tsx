@@ -6,6 +6,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { store, setStore } from "../store/terminalStore";
+import { isMac } from "../platform";
 import { t } from "../i18n";
 import { getShellInitScript } from "./shellInit";
 import { TermScreen, mkScreen } from "./ansiToHtml";
@@ -926,9 +927,44 @@ const BracesTerminal: Component<Props> = (props) => {
       // macOS Cmd+←/→ inside Claude Code: jump to start/end of line. The terminal
       // has no native meaning for Cmd+arrows, so translate to the readline bindings
       // Claude Code understands (Ctrl+A / Ctrl+E).
-      if (e.type === "keydown" && e.metaKey && !e.ctrlKey && !e.altKey && isClaudeSession()) {
+      if (e.type === "keydown" && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && isClaudeSession()) {
         if (e.key === "ArrowLeft")  { e.preventDefault(); sendRaw("\x01"); return false; }
         if (e.key === "ArrowRight") { e.preventDefault(); sendRaw("\x05"); return false; }
+      }
+      // Shift-modified navigation inside Claude Code's input. Claude Code's input
+      // editor has no keyboard text selection (only vim VISUAL mode / mouse), so
+      // these move the cursor: Shift+Home/End (CSI 1;2H / 1;2F) jump to line
+      // start/end, Alt+Shift (1;4) and Ctrl+Shift (1;6) arrows jump word by word.
+      // Cmd/Option combos never reach the terminal on macOS, so translate explicitly.
+      if (e.type === "keydown" && e.shiftKey && isClaudeSession()) {
+        const arrows = (left: string, right: string): boolean | null => {
+          if (e.key === "ArrowLeft")  { e.preventDefault(); sendRaw(left);  return false; }
+          if (e.key === "ArrowRight") { e.preventDefault(); sendRaw(right); return false; }
+          return null;
+        };
+        if (isMac) {
+          // Cmd+Shift+←/→: move to start/end of line (as Shift+Home/End).
+          if (e.metaKey && !e.ctrlKey && !e.altKey) {
+            const r = arrows("\x1b[1;2H", "\x1b[1;2F");
+            if (r !== null) return r;
+          }
+          // Option+Shift+←/→: move word by word.
+          if (e.altKey && !e.ctrlKey && !e.metaKey) {
+            const r = arrows("\x1b[1;4D", "\x1b[1;4C");
+            if (r !== null) return r;
+          }
+        } else {
+          // Windows/Linux — Ctrl+Shift+←/→: move word by word.
+          if (e.ctrlKey && !e.altKey && !e.metaKey) {
+            const r = arrows("\x1b[1;6D", "\x1b[1;6C");
+            if (r !== null) return r;
+          }
+          // Shift+Home/End: move to start/end of line.
+          if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+            if (e.key === "Home") { e.preventDefault(); sendRaw("\x1b[1;2H"); return false; }
+            if (e.key === "End")  { e.preventDefault(); sendRaw("\x1b[1;2F"); return false; }
+          }
+        }
       }
       return true;
     });
