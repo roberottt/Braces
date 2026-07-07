@@ -16,6 +16,20 @@ type Props = {
 const EditorPane: Component<Props> = (props) => {
   let containerRef: HTMLDivElement | undefined;
 
+  // Persist the buffer after a gutter-peek revert so the disk-based diff
+  // backing the gutter marks reflects the undone change right away.
+  const saveAfterRevert = async (view: EditorView) => {
+    const contents = view.state.doc.toString();
+    try {
+      await invoke("fs_write_file", { cwd: store.cwd, path: props.tab.relPath, contents });
+      savedContent.set(props.tab.id, contents);
+      setStore("editorTabs", (et) => et.id === props.tab.id, "dirty", false);
+      window.dispatchEvent(new CustomEvent("braces:git-refresh"));
+    } catch (e) {
+      console.error("[braces] fs_write_file failed:", e);
+    }
+  };
+
   const refreshGutter = async (view: EditorView) => {
     const cwd = store.cwd;
     if (!cwd || cwd === "~") return;
@@ -94,7 +108,7 @@ const EditorPane: Component<Props> = (props) => {
             EditorView.lineWrapping,
             editorTheme,
             editorHighlighting,
-            gitGutterExtension(),
+            gitGutterExtension({ save: saveAfterRevert }),
             ...langExt,
             EditorView.updateListener.of((update) => {
               if (!update.docChanged) return;

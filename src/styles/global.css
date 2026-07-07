@@ -3286,6 +3286,24 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+.editor-peek-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.editor-peek-revert {
+  background: none;
+  border: none;
+  color: var(--fg-dim);
+  cursor: pointer;
+  font-family: var(--font-hud);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 2px;
+  line-height: 1;
+}
+.editor-peek-revert:hover { color: var(--accent-amber); }
 .editor-peek-close {
   background: none;
   border: none;

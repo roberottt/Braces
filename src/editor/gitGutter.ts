@@ -1,5 +1,5 @@
 import { Decoration, DecorationSet, EditorView, WidgetType, gutter, GutterMarker } from "@codemirror/view";
-import { StateEffect, StateField, type Text } from "@codemirror/state";
+import { Facet, StateEffect, StateField, type Text } from "@codemirror/state";
 import { store } from "../store/terminalStore";
 import { t } from "../i18n";
 
@@ -114,6 +114,52 @@ class GitGutterMarker extends GutterMarker {
 export const setGutterMarks = StateEffect.define<GutterChanges>();
 export const togglePeek = StateEffect.define<number>();
 
+/** Host hooks: `save` persists the buffer to disk after a run is reverted so
+ *  the disk-based diff (and thus the gutter) stays in sync with the buffer. */
+export type GitGutterConfig = { save: (view: EditorView) => void };
+const gutterConfig = Facet.define<GitGutterConfig | null, GitGutterConfig | null>({
+  combine: (values) => values.find((v) => v != null) ?? null,
+});
+
+/**
+ * Undo a single change run in the buffer: insertions are deleted, modified
+ * lines are replaced by their HEAD content, and pure deletions are re-inserted
+ * at their anchor line. Line numbers come from the disk-vs-HEAD diff, so they
+ * are clamped defensively against the current doc.
+ */
+export function revertRun(view: EditorView, run: ChangeRun) {
+  const doc = view.state.doc;
+  let changes: { from: number; to?: number; insert?: string };
+
+  if (run.kind === "removed") {
+    // Anchor may sit one past the last line when the deletion was at EOF.
+    if (run.from > doc.lines) {
+      changes = { from: doc.length, insert: "\n" + run.oldLines.join("\n") };
+    } else {
+      changes = { from: doc.line(run.from).from, insert: run.oldLines.join("\n") + "\n" };
+    }
+  } else {
+    const last = Math.min(run.to, doc.lines);
+    const first = Math.min(run.from, last);
+    const fromLine = doc.line(first);
+    const toLine = doc.line(last);
+
+    if (run.kind === "modified") {
+      changes = { from: fromLine.from, to: toLine.to, insert: run.oldLines.join("\n") };
+    } else {
+      // Pure insertion — remove the lines plus one separating newline.
+      let from = fromLine.from;
+      let to = toLine.to;
+      if (to < doc.length) to += 1;
+      else if (from > 0) from -= 1;
+      changes = { from, to };
+    }
+  }
+
+  view.dispatch({ changes, effects: togglePeek.of(run.from) });
+  view.state.facet(gutterConfig)?.save(view);
+}
+
 const gutterMarksField = StateField.define<GutterChanges>({
   create() { return { marks: new Map(), runs: [] }; },
   update(value, tr) {
@@ -144,13 +190,25 @@ class PeekWidget extends WidgetType {
     const title = document.createElement("span");
     title.className = "editor-peek-title";
     title.textContent = t(lang, "editor_peek_title");
+    const actions = document.createElement("div");
+    actions.className = "editor-peek-actions";
+
+    const revert = document.createElement("button");
+    revert.className = "editor-peek-revert";
+    revert.textContent = "⟲ " + t(lang, "editor_peek_revert");
+    revert.title = t(lang, "editor_peek_revert");
+    revert.onmousedown = (e) => e.preventDefault();
+    revert.onclick = () => revertRun(view, this.run);
+
     const close = document.createElement("button");
     close.className = "editor-peek-close";
     close.textContent = "✕";
     close.title = t(lang, "close");
     close.onmousedown = (e) => e.preventDefault();
     close.onclick = () => view.dispatch({ effects: togglePeek.of(this.run.from) });
-    header.append(title, close);
+
+    actions.append(revert, close);
+    header.append(title, actions);
     box.appendChild(header);
 
     const body = document.createElement("div");
@@ -217,8 +275,9 @@ const peekField = StateField.define<PeekState>({
   provide: (f) => EditorView.decorations.from(f, (v) => v.deco),
 });
 
-export function gitGutterExtension() {
+export function gitGutterExtension(config?: GitGutterConfig) {
   return [
+    gutterConfig.of(config ?? null),
     gutterMarksField,
     peekField,
     gutter({
