@@ -36,12 +36,12 @@ base64 = "0.22"
 # Phase 4+
 sysinfo = "0.33"
 
-[target.'cfg(target_os = "macos")'.dependencies]
-libc = "0.2"
-
 # Persistence
 rusqlite = { version = "0.31", features = ["bundled"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
