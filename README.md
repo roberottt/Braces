@@ -57,7 +57,7 @@ Works on **Windows, macOS, and Linux**.
 
 **🖥️ Real terminal underneath** — full-screen apps like `vim`, `htop`, `ssh`, `tmux`, or `lazygit` just work: Braces detects them and hands over the pane automatically, then returns to card mode when they exit.
 
-**⚡ Claude Code friendly** — run `claude` inside Braces and it behaves natively, with `Shift+Enter` for newlines and clipboard image pasting built in.
+**⚡ Full Claude Code integration** — run `claude` inside Braces and it works out of the box, exactly as it does in a native terminal: full interactive TUI support, `Shift+Enter` to insert newlines, and clipboard image pasting (paste a screenshot and Claude Code attaches it automatically).
 
 **Also included:** multi-tab sessions, tab completion, history panel with inline suggestions (`↑` / `→`), semantic history search (`Ctrl+R`), clickable URLs (`Ctrl+Click`), system metrics overlay (`Ctrl+Shift+M`), 5 themes, Spanish/English UI, and session persistence — your tabs and chats come back after a restart.
 
