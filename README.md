@@ -1,4 +1,7 @@
-<img src="public/splash-eye-icon.png" alt="Braces logo" width="130" align="left" />
+<table>
+<tr>
+<td><img src="public/splash-eye-icon.png" alt="Braces logo" width="130" /></td>
+<td>
 
 ```
   ██████╗ ██████╗  █████╗  ██████╗███████╗███████╗
@@ -10,7 +13,9 @@
                    ⬡  Terminal
 ```
 
-<br clear="left" />
+</td>
+</tr>
+</table>
 
 > An AI-native terminal for your desktop. Every command becomes a card, and an AI agent lives right next to your shell.
 
