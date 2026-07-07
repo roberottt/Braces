@@ -993,33 +993,19 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   gap: 20px;
 }
 
-/* Eye: render img at 50px, scale 4× with pixelated upscaling */
 .nsw-eye-wrap {
   width: 200px;
   height: 200px;
   flex-shrink: 0;
-  overflow: hidden;
-  position: relative;
 }
 
 .nsw-eye-img {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 50px;
-  height: 50px;
-  transform: scale(4);
-  transform-origin: top left;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  /*
-   * invert(1)        : white bg → black, black marks → white
-   * sepia(1)         : white marks → warm yellow-white
-   * saturate(8)      : boost colour
-   * hue-rotate(200deg): rotate toward periwinkle (#8aa0ff)
-   * contrast(1.2)    : sharpen the result
-   */
-  filter: invert(1) sepia(1) saturate(4) hue-rotate(200deg) contrast(1.1);
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* Source art is black ink on transparent — invert to white for the dark UI */
+  filter: invert(1);
+  opacity: 0.9;
 }
 
 .nsw-title-block {

@@ -27,7 +27,6 @@ const NewSessionWelcome: Component<Props> = (props) => {
     <div class="nsw">
       <div class="nsw-header">
 
-        {/* Eye image: rendered tiny then scaled up for pixel-art look */}
         <div class="nsw-eye-wrap">
           <img
             src="/splash-eye.png"
