@@ -1515,6 +1515,11 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   line-height: 1;
   font-family: var(--font-term);
 }
+.sp-header-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
 .sp-header-btn:hover {
   background: color-mix(in srgb, var(--fg) 10%, transparent);
   color: var(--fg);
@@ -1724,19 +1729,6 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   text-align: right;
   padding: 5px 4px 0;
   user-select: none;
-}
-
-/* Agent badge */
-.sp-agent-badge {
-  font-family: var(--font-label);
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  color: var(--accent-lime);
-  border: 1px solid var(--accent-lime);
-  padding: 1px 5px;
-  border-radius: 2px;
-  margin-left: 6px;
-  opacity: 0.75;
 }
 
 /* Exec blocks — terminal command output inside the AI panel */

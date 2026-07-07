@@ -165,59 +165,6 @@ const AiSidePanel: Component = () => {
     }
   };
 
-  const analyzeError = async () => {
-    if (streaming()) return;
-    setStreaming(true);
-    setChatStore("messages", (prev) => [
-      ...prev,
-      { kind: "user" as const, content: "Analyze the last terminal error and suggest a fix." },
-      { kind: "assistant" as const, content: "" },
-    ]);
-    scrollBottom();
-
-    const unlisten = await listen<string>("ai-analysis-token", (ev) => {
-      setChatStore("messages", (prev) => {
-        const copy = [...prev];
-        const last = copy[copy.length - 1];
-        if (last?.kind === "assistant") {
-          copy[copy.length - 1] = { ...last, content: last.content + ev.payload };
-        }
-        return copy;
-      });
-      scrollBottom();
-    });
-
-    try {
-      const result = await invoke<string>("ai_analyze_error", {
-        activeTabId: store.activeTabId,
-      });
-      if (result) {
-        setChatStore("messages", (prev) => {
-          const copy = [...prev];
-          const last = copy[copy.length - 1];
-          if (last?.kind === "assistant" && last.content.length < result.length) {
-            copy[copy.length - 1] = { ...last, content: result };
-          }
-          return copy;
-        });
-      }
-    } catch (e) {
-      setChatStore("messages", (prev) => {
-        const copy = [...prev];
-        const last = copy[copy.length - 1];
-        if (last?.kind === "assistant") {
-          copy[copy.length - 1] = { ...last, content: `Error: ${e}` };
-        }
-        return copy;
-      });
-    } finally {
-      unlisten();
-      setStreaming(false);
-      scrollBottom();
-      await persistActiveChat();
-    }
-  };
-
   const applyFix = () => {
     const allContent = chatStore.messages
       .filter((m): m is AssistMsg => m.kind === "assistant")
@@ -229,8 +176,6 @@ const AiSidePanel: Component = () => {
       window.dispatchEvent(new CustomEvent("braces:inject-cmd", { detail: cmd }));
     }
   };
-
-  const clearChat = () => setChatStore("messages", []);
 
   onMount(() => inputRef?.focus());
 
@@ -249,19 +194,20 @@ const AiSidePanel: Component = () => {
         <span class="sp-model" title={t(store.language, "provider_model_tip")}>
           {store.provider}{store.model ? ` · ${store.model}` : ""}
         </span>
-        <span class="sp-agent-badge">AGENT</span>
         <span style={{ flex: 1 }} />
         <div class="sp-header-actions">
-          <button class="sp-header-btn" title={t(store.language, "analyze")} onClick={analyzeError} disabled={streaming()}>
-            ▲
-          </button>
           <Show when={chatStore.messages.some(m => m.kind === "assistant" && (m as AssistMsg).content.includes("FIX:"))}>
             <button class="sp-header-btn" title={t(store.language, "apply_fix_hint")} onClick={applyFix}>
-              ⚡
+              <svg class="sp-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
             </button>
           </Show>
           <button class="sp-header-btn" title={t(store.language, "new_chat")} onClick={newChat} disabled={streaming()}>
-            ＋
+            <svg class="sp-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
           </button>
           <button
             class="sp-header-btn"
@@ -269,17 +215,21 @@ const AiSidePanel: Component = () => {
             title={t(store.language, "chat_history")}
             onClick={() => setChatStore("historyOpen", v => !v)}
           >
-            ☰
-          </button>
-          <button class="sp-header-btn" title={t(store.language, "clear_chat")} onClick={clearChat}>
-            ⌫
+            <svg class="sp-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="4" y1="6" x2="20" y2="6" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="18" x2="20" y2="18" />
+            </svg>
           </button>
           <button
             class="sp-header-btn close"
             title={t(store.language, "close")}
             onClick={() => setStore("sidePanelOpen", false)}
           >
-            ✕
+            <svg class="sp-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
       </div>
