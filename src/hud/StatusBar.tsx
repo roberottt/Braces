@@ -86,7 +86,21 @@ const StatusBar: Component = () => {
         onClick={() => setStore("sidePanelOpen", (v) => !v)}
         title={t(store.language, "ai_panel_tip")}
       >
-        R2
+        <svg width="22" height="14" viewBox="0 0 19 12" fill="none">
+          <rect x="0.5" y="0.5" width="18" height="11" rx="2.5" stroke="currentColor" stroke-width="0.9" />
+          <text
+            x="9.5"
+            y="8.9"
+            text-anchor="middle"
+            fill="currentColor"
+            stroke="none"
+            font-size="7.5"
+            font-weight="600"
+            font-family="inherit"
+          >
+            R2
+          </text>
+        </svg>
       </span>
       <span
         class="sb-item sb-icon"
