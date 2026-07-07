@@ -143,6 +143,7 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   white-space: nowrap;
 }
 
+.status-bar .sb-item.sb-icon { font-size: 14px; }
 .status-bar .sb-item.accent { color: var(--accent); }
 .status-bar .sb-item.err    { color: var(--accent-red); }
 .status-bar .sb-item.ok     { color: var(--accent-lime); }
@@ -185,6 +186,12 @@ html, body, #root { width: 100%; height: 100%; overflow: hidden; }
   background: #e81123;
   color: #fff;
 }
+
+/* macOS: native traffic lights (titleBarStyle Overlay) replace the custom
+   buttons, and the window gets native rounded corners. */
+html[data-platform="macos"] .app { border-radius: 0; }
+html[data-platform="macos"] .status-bar { padding-left: 100px; padding-right: 14px; }
+html[data-platform="macos"] .status-bar .win-controls { display: none; }
 
 /* ── Workspace ───────────────────────────────────────────────────────────── */
 .workspace {

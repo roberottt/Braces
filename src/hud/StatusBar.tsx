@@ -53,7 +53,7 @@ const StatusBar: Component = () => {
 
       {/* Controls */}
       <span
-        class="sb-item"
+        class="sb-item sb-icon"
         style={{ cursor: "pointer", color: store.currentView === "editor" ? "var(--accent)" : undefined }}
         onClick={() => setStore("currentView", (v) => (v === "editor" ? "terminal" : "editor"))}
         title={t(store.language, "editor_view_tip")}
@@ -61,7 +61,7 @@ const StatusBar: Component = () => {
         ✎
       </span>
       <span
-        class="sb-item"
+        class="sb-item sb-icon"
         style={{ cursor: "pointer", color: store.gitPanelOpen ? "var(--accent)" : undefined }}
         onClick={() => setStore("gitPanelOpen", (v) => !v)}
         title={t(store.language, "source_control_tip")}
@@ -69,7 +69,7 @@ const StatusBar: Component = () => {
         ⎇
       </span>
       <span
-        class="sb-item"
+        class="sb-item sb-icon"
         style={{ cursor: "pointer", color: store.codeReviewOpen ? "var(--accent)" : undefined }}
         onClick={() => setStore("codeReviewOpen", (v) => !v)}
         title={t(store.language, "code_review_tip")}
@@ -77,7 +77,7 @@ const StatusBar: Component = () => {
         ✓
       </span>
       <span
-        class="sb-item"
+        class="sb-item sb-icon"
         style={{ cursor: "pointer", color: store.sidePanelOpen ? "var(--accent)" : undefined }}
         onClick={() => setStore("sidePanelOpen", (v) => !v)}
         title={t(store.language, "ai_panel_tip")}
@@ -85,7 +85,7 @@ const StatusBar: Component = () => {
         R2
       </span>
       <span
-        class="sb-item"
+        class="sb-item sb-icon"
         style={{ cursor: "pointer", color: store.metricsOpen ? "var(--accent)" : undefined }}
         onClick={() => setStore("metricsOpen", (v) => !v)}
         title={t(store.language, "resource_monitor_tip")}
@@ -94,7 +94,7 @@ const StatusBar: Component = () => {
       </span>
       {/* Settings */}
       <span
-        class="sb-item sb-settings"
+        class="sb-item sb-icon sb-settings"
         style={{ cursor: "pointer", color: store.settingsOpen ? "var(--accent)" : "var(--fg-dim)" }}
         onClick={() => setStore("settingsOpen", v => !v)}
         title={t(store.language, "settings_tip")}

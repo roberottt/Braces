@@ -2,6 +2,13 @@ import { render } from "solid-js/web";
 import App from "./App";
 import "./styles/global.css";
 
+// Platform flag for CSS: on macOS the window uses native decorations with the
+// traffic lights overlaid (titleBarStyle Overlay), so the custom window
+// buttons are hidden and the status bar leaves room on the left.
+if (navigator.userAgent.includes("Mac")) {
+  document.documentElement.dataset.platform = "macos";
+}
+
 const root = document.getElementById("root")!;
 const dispose = render(() => <App />, root);
 
