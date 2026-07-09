@@ -1148,6 +1148,9 @@ const BracesTerminal: Component<Props> = (props) => {
 
     const onGlobalKey = (e: KeyboardEvent) => {
       if (store.activeTabId !== props.tabId) return;
+      // The terminal stays mounted (hidden) under the full-window editor;
+      // its shortcuts must not fire while the editor view is active.
+      if (store.currentView !== "terminal") return;
       if (e.ctrlKey && e.shiftKey && e.key === "A") { e.preventDefault(); setStore("sidePanelOpen", v => !v); }
       if (e.ctrlKey && e.shiftKey && e.key === "M") { e.preventDefault(); setStore("metricsOpen", v => !v); }
 

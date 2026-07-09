@@ -246,8 +246,11 @@ const App: Component = () => {
 
       <StatusBar />
 
-      <Show when={store.currentView === "editor"} fallback={
-        <div class="workspace">
+      {/* Workspace stays mounted while the editor is open — unmounting it
+          would kill every PTY (BracesTerminal's onCleanup calls pty_kill),
+          dropping live sessions like Claude Code. Hidden via CSS instead. */}
+      <div class="main-view">
+        <div class="workspace" classList={{ hidden: store.currentView === "editor" }}>
           {/* Left dock — sessions or files */}
           <Show when={store.tabsSidebarOpen}>
             <Show when={store.leftDockView === "sessions"} fallback={<WorkspacePanel />}>
@@ -299,9 +302,11 @@ const App: Component = () => {
             <CodeReviewPanel />
           </Show>
         </div>
-      }>
-        <EditorView />
-      </Show>
+
+        <Show when={store.currentView === "editor"}>
+          <EditorView />
+        </Show>
+      </div>
 
       <Show when={store.metricsOpen}>
         <MetricsOverlay />

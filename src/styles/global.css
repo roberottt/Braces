@@ -194,12 +194,30 @@ html[data-platform="macos"] .status-bar { padding-left: 100px; padding-right: 14
 html[data-platform="macos"] .status-bar .win-controls { display: none; }
 
 /* ── Workspace ───────────────────────────────────────────────────────────── */
+/* Holds both the terminal workspace and the full-window editor. The workspace
+   is never unmounted (that would kill its PTYs); when the editor is open it is
+   absolutely positioned over the same box and made invisible, so its size
+   never changes and xterm needs no refit. */
+.main-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
 .workspace {
   flex: 1;
   min-height: 0;
   display: flex;
   overflow: hidden;
   position: relative; /* anchor for maximized tool panels */
+}
+.workspace.hidden {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .terminal-area {
