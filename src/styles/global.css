@@ -796,11 +796,19 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   line-height: 1.4;
   color: var(--fg);
 }
-.wib-hl-inner .tok-sub  { color: #7fd6d0; }            /* sub-command — teal   */
-.wib-hl-inner .tok-arg  { color: var(--fg); }          /* args / paths — plain */
-.wib-hl-inner .tok-flag { color: var(--fg-mid); }      /* flags — muted        */
-.wib-hl-inner .tok-str  { color: #9ad19a; }            /* strings — soft green  */
-.wib-hl-inner .tok-op   { color: #c4a3f5; }            /* operators — violet    */
+/* Command names — one fixed colour per command family (see CMD_CATEGORY). */
+.wib-hl-inner .tok-cmd       { color: #8aa0ff; }       /* unknown cmd — periwinkle */
+.wib-hl-inner .tok-cmd-vcs   { color: #e5a06b; }       /* git, gh…    — orange     */
+.wib-hl-inner .tok-cmd-pkg   { color: #ef9ebe; }       /* npm, cargo… — pink       */
+.wib-hl-inner .tok-cmd-infra { color: #7fc4f0; }       /* docker, k8s — blue       */
+.wib-hl-inner .tok-cmd-net   { color: #d6c87f; }       /* curl, ssh…  — sand       */
+.wib-hl-inner .tok-cmd-file  { color: #7fd6d0; }       /* ls, cp, rm… — teal       */
+
+.wib-hl-inner .tok-sub  { color: #a8c7fa; }            /* sub-command — light blue */
+.wib-hl-inner .tok-arg  { color: var(--fg); }          /* args / paths — plain     */
+.wib-hl-inner .tok-flag { color: var(--fg-mid); }      /* flags — muted            */
+.wib-hl-inner .tok-str  { color: #9ad19a; }            /* strings — soft green     */
+.wib-hl-inner .tok-op   { color: #c4a3f5; }            /* operators — violet       */
 
 .wib-input {
   position: relative;

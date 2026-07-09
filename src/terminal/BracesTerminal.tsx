@@ -105,17 +105,29 @@ const CMD_WITH_SUB = new Set([
 const escHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-// Distinct, calm colours for command names — each command keeps a stable colour
-// derived from its own name, so `git`, `npm`, `cargo`, `ls`… look different.
-const CMD_COLORS = [
-  "#8aa0ff", "#6fcf97", "#e0b07a", "#b08af0", "#7fd6d0",
-  "#f0a3c0", "#d6c87f", "#87b9f5", "#9ad19a", "#f5a97f",
-];
-function cmdColor(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return CMD_COLORS[h % CMD_COLORS.length];
-}
+// Semantic colour category per command family, so every command of the same kind
+// shares one colour (all VCS commands orange, all package managers pink, …).
+// Categories map to `.tok-cmd-<cat>` CSS classes; unknown commands use `.tok-cmd`.
+const CMD_CATEGORY = new Map<string, string>();
+const defineCategory = (cat: string, names: string[]) => {
+  for (const n of names) CMD_CATEGORY.set(n, cat);
+};
+defineCategory("vcs", ["git", "gh", "svn", "hg", "jj"]);
+defineCategory("pkg", [
+  "npm", "pnpm", "yarn", "bun", "bunx", "npx", "cargo", "pip", "pip3", "uv", "uvx",
+  "poetry", "gem", "composer", "apt", "apt-get", "brew", "conda", "nix", "rustup",
+  "dotnet", "go", "make", "deno", "tauri",
+]);
+defineCategory("infra", [
+  "docker", "podman", "kubectl", "helm", "terraform", "systemctl", "launchctl",
+  "service", "journalctl",
+]);
+defineCategory("net", ["curl", "wget", "ssh", "scp", "rsync", "ping", "dig", "nc", "netstat"]);
+defineCategory("file", [
+  "ls", "cd", "pwd", "cp", "mv", "rm", "mkdir", "rmdir", "touch", "ln", "cat",
+  "head", "tail", "less", "more", "grep", "rg", "find", "fd", "sed", "awk", "sort",
+  "wc", "diff", "tar", "zip", "unzip", "chmod", "chown", "which", "echo", "open",
+]);
 
 /** Tokenise a command line into coloured HTML for the overlay. Whitespace preserved. */
 function highlightCmd(text: string): string {
@@ -123,21 +135,47 @@ function highlightCmd(text: string): string {
   let html = "";
   let plainWord = 0;          // index among non-flag / non-operator words
   let firstWord = "";
-  for (const part of text.split(/(\s+)/)) {
-    if (part === "") continue;
-    if (/^\s+$/.test(part)) { html += escHtml(part); continue; }
+  let i = 0;
+  while (i < text.length) {
+    // Whitespace run — emitted as-is so the overlay stays pixel-aligned.
+    if (/\s/.test(text[i])) {
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j])) j++;
+      html += escHtml(text.slice(i, j));
+      i = j;
+      continue;
+    }
+    // Quoted string — spans whitespace until the matching quote (or line end
+    // while still typing), so `-m "Hola que tal"` colours as one token.
+    if (text[i] === '"' || text[i] === "'") {
+      const quote = text[i];
+      let j = i + 1;
+      while (j < text.length && text[j] !== quote) j++;
+      if (j < text.length) j++;
+      html += `<span class="tok-str">${escHtml(text.slice(i, j))}</span>`;
+      i = j;
+      plainWord++;
+      continue;
+    }
+    let j = i;
+    while (j < text.length && !/[\s"']/.test(text[j])) j++;
+    const part = text.slice(i, j);
+    i = j;
 
     const safe = escHtml(part);
-    if (/^["']/.test(part)) {                         // quoted string
-      html += `<span class="tok-str">${safe}</span>`;
-    } else if (/^[|&;<>]+$/.test(part)) {             // pipe / redirect / chain
+    if (/^[|&;<>]+$/.test(part)) {                    // pipe / redirect / chain
       html += `<span class="tok-op">${safe}</span>`;
+      // The next word starts a new command (`git log | grep fix`).
+      if (/^(\|\|?|&&?|;)$/.test(part)) { plainWord = 0; firstWord = ""; }
     } else if (part.startsWith("-")) {                // -v / --flag
       html += `<span class="tok-flag">${safe}</span>`;
-    } else if (plainWord === 0) {                     // command name → per-command colour
+    } else if (plainWord === 0) {                     // command name → category colour
       firstWord = baseName(part);
-      html += `<span style="color:${cmdColor(firstWord)}">${safe}</span>`;
-      plainWord++;
+      const cat = CMD_CATEGORY.get(firstWord);
+      html += `<span class="${cat ? `tok-cmd-${cat}` : "tok-cmd"}">${safe}</span>`;
+      // Wrappers (`sudo git …`) don't consume the command slot unless they take
+      // a sub-command of their own (npm/pnpm/… are in CMD_WITH_SUB).
+      if (!COMMAND_WRAPPERS.has(firstWord) || CMD_WITH_SUB.has(firstWord)) plainWord++;
     } else if (plainWord === 1 && CMD_WITH_SUB.has(firstWord)) { // sub-command
       html += `<span class="tok-sub">${safe}</span>`;
       plainWord++;
