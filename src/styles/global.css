@@ -1279,35 +1279,19 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   /* Transform transitions drive the "items slide out of the way" animation */
   transition: transform 0.18s cubic-bezier(0.25, 0.46, 0.45, 0.94),
               background 0.1s, opacity 0.12s;
-  border-left: 2px solid transparent;
   min-width: 0;
   user-select: none;
   will-change: transform;
 }
-.tab-item:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.tab-item:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
 .tab-item.active {
-  background: linear-gradient(90deg,
-    color-mix(in srgb, var(--accent) 14%, transparent),
-    color-mix(in srgb, var(--accent) 6%, transparent));
-  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--fg) 9%, transparent);
 }
 /* Ghost — invisible in-place placeholder while float follows cursor */
 .tab-item.dragging {
   opacity: 0;
   pointer-events: none;
 }
-
-/* ── Drag handle ─────────────────────────────────────────────────────────── */
-.tab-item-drag-handle {
-  font-size: 14px;
-  color: var(--fg-dim);
-  cursor: grab;
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 0.15s;
-  line-height: 1;
-}
-.tab-item:hover .tab-item-drag-handle { opacity: 0.45; }
 
 /* ── Floating drag element (follows cursor) ──────────────────────────────── */
 .tab-drag-float {
@@ -1320,10 +1304,7 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   padding: 7px 10px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-s);
-  border-left: 2px solid var(--accent);
-  border-top: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  border-right: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   box-shadow: 0 6px 24px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.3);
   transform: scale(1.015);
   opacity: 0.96;
@@ -1333,11 +1314,26 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
 }
 
 .tab-item-icon {
-  font-size: 14px;
-  color: var(--fg-dim);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  border: 1px solid var(--border);
+  color: var(--fg-mid);
+  user-select: none;
 }
-.tab-item.active .tab-item-icon { color: var(--accent); }
+.tab-item-icon svg { display: block; }
+.tab-item-icon.claude { color: #d97757; }
+.tab-item-icon.git    { color: #f05032; }
+.tab-item-icon.editor { color: var(--accent-lime); }
+.tab-item-icon.ssh    { color: var(--accent-cyan); }
+.tab-item-icon.node   { color: #5fa04e; }
+.tab-item-icon.docker { color: #2496ed; }
+.tab-item-icon.rust   { color: var(--accent-amber); }
 
 .tab-item-info {
   flex: 1;
