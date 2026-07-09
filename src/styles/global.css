@@ -1295,7 +1295,7 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 10px;
+  padding: 13px 10px;
   margin: 1px 6px;
   border-radius: var(--radius-s);
   cursor: pointer;
@@ -1324,7 +1324,7 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 10px;
+  padding: 13px 10px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-s);
   border: 1px solid var(--border-strong);
