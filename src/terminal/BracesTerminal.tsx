@@ -722,7 +722,7 @@ const BracesTerminal: Component<Props> = (props) => {
         submitCmd();
         return;
       }
-      if (e.key === "Tab") {
+      if (e.key === "Tab" && !e.ctrlKey) {
         e.preventDefault();
         const comps = tabCompletions();
         const next = (tabCompIdx() + 1) % comps.length;
@@ -815,6 +815,7 @@ const BracesTerminal: Component<Props> = (props) => {
         return;
       }
       case "Tab": {
+        if (e.ctrlKey) return; // Ctrl+Tab / Ctrl+Shift+Tab switch tabs (handled in App.tsx)
         e.preventDefault();
         const text = cmdText();
         preTabText = text;
