@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { store, setStore, genTabId, type Tab } from "../store/terminalStore";
 import { t } from "../i18n";
 import { isMac } from "../platform";
+import { tabIcon } from "./tabIcons";
 
 
 function shortCwd(cwd: string): string {
@@ -232,7 +233,7 @@ const TabSidebar: Component = () => {
                 data-tab-id={tab.id}
                 style={{ transform: itemTranslate(realIdx()) }}
               >
-                <span class="tab-item-drag-handle">⠿</span>
+                <span class={`tab-item-icon ${tabIcon(tab.title).cls}`}>{tabIcon(tab.title).icon()}</span>
                 <div class="tab-item-info">
                   <div class="tab-item-title">{tab.title}</div>
                   <div class="tab-item-cwd">{shortCwd(tab.cwd)}</div>
@@ -259,7 +260,7 @@ const TabSidebar: Component = () => {
                 width: `${listWidth}px`,
               }}
             >
-              <span class="tab-item-drag-handle" style={{ opacity: "0.7" }}>⠿</span>
+              <span class={`tab-item-icon ${tabIcon(tab.title).cls}`}>{tabIcon(tab.title).icon()}</span>
               <div class="tab-item-info">
                 <div class="tab-item-title">{tab.title}</div>
                 <div class="tab-item-cwd">{shortCwd(tab.cwd)}</div>

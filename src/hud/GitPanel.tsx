@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { store, setStore } from "../store/terminalStore";
 import { t } from "../i18n";
 import GitDiffView from "./GitDiffView";
+import PanelSizeControls from "./PanelSizeControls";
+import PanelResizeHandle from "./PanelResizeHandle";
 
 type GitStatusKind = "modified" | "added" | "deleted" | "renamed" | "copied" | "untracked" | "conflicted";
 
@@ -135,7 +137,14 @@ const GitPanel: Component = () => {
   };
 
   return (
-    <div class="git-panel">
+    <div
+      class="git-panel"
+      classList={{ maximized: store.panelMaximized === "git" }}
+      style={store.panelWidth.git != null && store.panelMaximized !== "git"
+        ? { width: `${store.panelWidth.git}px`, "min-width": `${store.panelWidth.git}px` }
+        : undefined}
+    >
+      <PanelResizeHandle panel="git" />
       <div class="hud-corners"><span class="hc-br" /><span class="hc-bl" /></div>
 
       {/* Header */}
@@ -150,6 +159,7 @@ const GitPanel: Component = () => {
         </span>
         <div class="sp-header-actions">
           <button class="sp-header-btn" title={t(store.language, "refresh")} onClick={refresh}>↻</button>
+          <PanelSizeControls panel="git" />
           <button class="sp-header-btn close" title={t(store.language, "close")}
             onClick={() => setStore("gitPanelOpen", false)}>✕</button>
         </div>

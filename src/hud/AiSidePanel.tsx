@@ -15,6 +15,8 @@ import {
   type ExecMsg,
 } from "../store/chatStore";
 import { t } from "../i18n";
+import PanelSizeControls from "./PanelSizeControls";
+import PanelResizeHandle from "./PanelResizeHandle";
 
 /** Build ChatMessage history for the backend, embedding exec results into context. */
 function buildHistory(msgs: Msg[]): { role: string; content: string }[] {
@@ -183,7 +185,14 @@ const AiSidePanel: Component = () => {
   const isLastMsg = (idx: () => number) => idx() === chatStore.messages.length - 1;
 
   return (
-    <div class="side-panel">
+    <div
+      class="side-panel"
+      classList={{ maximized: store.panelMaximized === "ai" }}
+      style={store.panelWidth.ai != null && store.panelMaximized !== "ai"
+        ? { width: `${store.panelWidth.ai}px`, "min-width": `${store.panelWidth.ai}px` }
+        : undefined}
+    >
+      <PanelResizeHandle panel="ai" />
       <div class="hud-corners">
         <span class="hc-br" />
         <span class="hc-bl" />
@@ -221,6 +230,7 @@ const AiSidePanel: Component = () => {
               <line x1="4" y1="18" x2="20" y2="18" />
             </svg>
           </button>
+          <PanelSizeControls panel="ai" />
           <button
             class="sp-header-btn close"
             title={t(store.language, "close")}

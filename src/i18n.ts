@@ -53,6 +53,11 @@ const T = {
     maximize:              "Maximize",
     restore_window:        "Restore",
 
+    // Tool panel sizing
+    panel_maximize:        "Maximize panel",
+    panel_restore:         "Restore panel",
+    panel_resize_tip:      "Drag to resize · double-click to reset",
+
     // AI side panel
     provider_model_tip:    "Provider · active model",
     clear_chat:            "Clear chat",
@@ -225,6 +230,11 @@ const T = {
     minimize:              "Minimizar",
     maximize:              "Maximizar",
     restore_window:        "Restaurar",
+
+    // Tamaño de paneles de herramientas
+    panel_maximize:        "Maximizar panel",
+    panel_restore:         "Restaurar panel",
+    panel_resize_tip:      "Arrastra para redimensionar · doble clic para restablecer",
 
     // AI side panel
     provider_model_tip:    "Proveedor · modelo activo",

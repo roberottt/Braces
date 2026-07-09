@@ -201,18 +201,46 @@ fn classify_shell(path: &str) -> String {
 
 #[cfg(windows)]
 fn find_powershell() -> Option<String> {
-    // Only PS7 (pwsh.exe) — reliable with ConPTY. PS5 has hang issues.
-    let candidates = [
-        r"C:\Program Files\PowerShell\7\pwsh.exe",
-        r"C:\Program Files\PowerShell\7-preview\pwsh.exe",
-        r"C:\Program Files\PowerShell\7.5\pwsh.exe",
-        r"C:\Program Files\PowerShell\7.4\pwsh.exe",
-        r"C:\Program Files\PowerShell\7.3\pwsh.exe",
+    use std::path::{Path, PathBuf};
+
+    // Only PS7 (pwsh.exe) — reliable with ConPTY. PS5 (powershell.exe) has hang
+    // issues, so it is deliberately never selected here.
+    //
+    // 1) Canonical install locations first (winget / MSI put PS7 here). Checking these
+    //    directly is cheaper than scanning PATH and covers the common case.
+    let mut candidates: Vec<PathBuf> = vec![
+        r"C:\Program Files\PowerShell\7\pwsh.exe".into(),
+        r"C:\Program Files\PowerShell\7-preview\pwsh.exe".into(),
     ];
-    for p in candidates {
-        if std::path::Path::new(p).exists() {
-            return Some(p.into());
+    // Program Files can be relocated; resolve it from the environment too.
+    for var in ["ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"] {
+        if let Ok(pf) = std::env::var(var) {
+            candidates.push(Path::new(&pf).join(r"PowerShell\7\pwsh.exe"));
+            candidates.push(Path::new(&pf).join(r"PowerShell\7-preview\pwsh.exe"));
         }
     }
+    // scoop and the Microsoft Store both install per-user, outside Program Files.
+    if let Ok(home) = std::env::var("USERPROFILE") {
+        candidates.push(Path::new(&home).join(r"scoop\apps\pwsh\current\pwsh.exe"));
+    }
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        candidates.push(Path::new(&local).join(r"Microsoft\WindowsApps\pwsh.exe"));
+    }
+    for p in &candidates {
+        if p.exists() {
+            return Some(p.to_string_lossy().into_owned());
+        }
+    }
+
+    // 2) Fall back to scanning PATH so a pwsh installed anywhere still gets picked up.
+    if let Ok(path) = std::env::var("PATH") {
+        for dir in path.split(';').filter(|d| !d.is_empty()) {
+            let exe = Path::new(dir).join("pwsh.exe");
+            if exe.exists() {
+                return Some(exe.to_string_lossy().into_owned());
+            }
+        }
+    }
+
     None
 }

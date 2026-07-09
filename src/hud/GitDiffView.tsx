@@ -2,6 +2,7 @@ import { Component, For, Show, createEffect, createSignal } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { store } from "../store/terminalStore";
 import { t } from "../i18n";
+import { shiftWheelScroll } from "./shiftWheelScroll";
 
 type GitDiffLine = {
   origin: string;
@@ -52,7 +53,7 @@ const GitDiffView: Component<Props> = (props) => {
     origin === "+" ? "add" : origin === "-" ? "del" : "ctx";
 
   return (
-    <div class="git-diff-scroll">
+    <div class="git-diff-scroll" onWheel={shiftWheelScroll}>
       <Show when={loading()}>
         <div class="git-diff-empty">{t(store.language, "loading")}</div>
       </Show>

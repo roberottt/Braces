@@ -199,6 +199,7 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   min-height: 0;
   display: flex;
   overflow: hidden;
+  position: relative; /* anchor for maximized tool panels */
 }
 
 .terminal-area {
@@ -365,11 +366,8 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
 
 /* ── Command blocks ──────────────────────────────────────────────────────── */
 .cmd-block {
-  background: linear-gradient(180deg,
-    color-mix(in srgb, var(--fg) 3%, var(--bg-secondary)),
-    var(--bg-secondary));
+  background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-left: 3px solid var(--fg-dim);
   border-radius: var(--radius-m);
   box-shadow: var(--shadow-1);
   font-family: var(--font-term);
@@ -380,23 +378,18 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
 }
 .cmd-block:hover { border-color: var(--border-strong); }
 
-.cmd-block.running { border-left-color: var(--accent-cyan); }
-.cmd-block.ok      { border-left-color: var(--accent-lime); }
-.cmd-block.err     { border-left-color: var(--accent-red); }
-
 .cmd-block-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 5px 12px;
-  border-bottom: 1px solid var(--border);
-  font-family: var(--font-label);
-  font-size: 10px;
+  padding: 8px 14px 0;
+  font-family: var(--font-term);
+  font-size: 11px;
   color: var(--fg-dim);
   user-select: none;
 }
 
-.cmd-block-cwd { color: var(--accent-cyan); }
+.cmd-block-cwd { color: var(--fg-dim); }
 
 .cmd-block-status.ok  { color: var(--accent-lime); margin-left: auto; }
 .cmd-block-status.err { color: var(--accent-red);  margin-left: auto; }
@@ -430,7 +423,7 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 10px;
+  padding: 4px 14px;
   font-size: 13px;
   font-weight: 600;
   color: var(--fg);
@@ -444,12 +437,10 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
 }
 
 .cmd-block-output {
-  background: color-mix(in srgb, var(--bg-primary) 60%, transparent);
-  padding: 6px 12px 9px;
+  padding: 4px 14px 10px;
   font-size: 12.5px;
   line-height: 1.45;
   color: var(--fg);
-  border-top: 1px solid var(--border);
   white-space: pre;
   overflow-x: auto;
   word-break: normal;
@@ -1289,35 +1280,19 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   /* Transform transitions drive the "items slide out of the way" animation */
   transition: transform 0.18s cubic-bezier(0.25, 0.46, 0.45, 0.94),
               background 0.1s, opacity 0.12s;
-  border-left: 2px solid transparent;
   min-width: 0;
   user-select: none;
   will-change: transform;
 }
-.tab-item:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.tab-item:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
 .tab-item.active {
-  background: linear-gradient(90deg,
-    color-mix(in srgb, var(--accent) 14%, transparent),
-    color-mix(in srgb, var(--accent) 6%, transparent));
-  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--fg) 9%, transparent);
 }
 /* Ghost — invisible in-place placeholder while float follows cursor */
 .tab-item.dragging {
   opacity: 0;
   pointer-events: none;
 }
-
-/* ── Drag handle ─────────────────────────────────────────────────────────── */
-.tab-item-drag-handle {
-  font-size: 14px;
-  color: var(--fg-dim);
-  cursor: grab;
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 0.15s;
-  line-height: 1;
-}
-.tab-item:hover .tab-item-drag-handle { opacity: 0.45; }
 
 /* ── Floating drag element (follows cursor) ──────────────────────────────── */
 .tab-drag-float {
@@ -1330,10 +1305,7 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   padding: 7px 10px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-s);
-  border-left: 2px solid var(--accent);
-  border-top: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  border-right: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   box-shadow: 0 6px 24px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.3);
   transform: scale(1.015);
   opacity: 0.96;
@@ -1343,11 +1315,26 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
 }
 
 .tab-item-icon {
-  font-size: 14px;
-  color: var(--fg-dim);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  border: 1px solid var(--border);
+  color: var(--fg-mid);
+  user-select: none;
 }
-.tab-item.active .tab-item-icon { color: var(--accent); }
+.tab-item-icon svg { display: block; }
+.tab-item-icon.claude { color: #d97757; }
+.tab-item-icon.git    { color: #f05032; }
+.tab-item-icon.editor { color: var(--accent-lime); }
+.tab-item-icon.ssh    { color: var(--accent-cyan); }
+.tab-item-icon.node   { color: #5fa04e; }
+.tab-item-icon.docker { color: #2496ed; }
+.tab-item-icon.rust   { color: var(--accent-amber); }
 
 .tab-item-info {
   flex: 1;
@@ -1432,6 +1419,34 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   flex-direction: column;
   overflow: hidden;
   position: relative;
+}
+
+/* Left-edge drag handle — resize the panel toward the left */
+.panel-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+  z-index: 5;
+  touch-action: none;
+  transition: background 0.12s;
+}
+.panel-resize-handle:hover,
+.panel-resize-handle.dragging {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* Maximized mode — panel covers the whole workspace, like the editor view */
+.side-panel.maximized,
+.git-panel.maximized {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  min-width: 0;
+  z-index: 60;
+  border-left: none;
 }
 
 .side-panel .sp-header,
@@ -2819,6 +2834,10 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   font-family: var(--font-term);
   font-size: 11px;
   line-height: 1.65;
+  /* grow with long lines so .git-diff-scroll can scroll horizontally,
+     while still spanning the full panel width for the row backgrounds */
+  width: max-content;
+  min-width: 100%;
 }
 .diff-line.add { background: color-mix(in srgb, #4ade80 14%, transparent); }
 .diff-line.del { background: color-mix(in srgb, #f87171 13%, transparent); }
@@ -2853,7 +2872,6 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   flex: 1;
   padding: 0 8px;
   white-space: pre;
-  overflow: hidden;
 }
 .diff-line.add .diff-content { color: color-mix(in srgb, #4ade80 75%, var(--fg)); }
 .diff-line.del .diff-content { color: color-mix(in srgb, #f87171 75%, var(--fg)); }
@@ -3049,6 +3067,46 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   font-family: var(--font-label);
   font-size: 11px;
   line-height: 1.65;
+}
+
+/* Review body scrolls horizontally as a whole (Shift+wheel); prose still
+   wraps at the visible width, only code blocks extend past it. */
+.review-scroll {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  /* makes 100cqw below resolve to this element's visible width */
+  container-type: inline-size;
+}
+.review-scroll .review-body {
+  min-width: 100%;
+  width: max-content;
+  max-width: none;
+}
+.review-scroll .rv-p,
+.review-scroll .rv-li,
+.review-scroll .rv-bullet,
+.review-scroll .rv-h1,
+.review-scroll .rv-h2,
+.review-scroll .rv-h3 {
+  /* keep prose wrapping at the scrollport width, not at max-content */
+  max-width: calc(100cqw - 28px);
+}
+
+/* Fenced code block — lines never wrap; the container provides the scroll */
+.rv-codeblock {
+  margin: 6px 0;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--font-term);
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--fg-mid);
+  white-space: pre;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
 }
 
 .rv-h3 {

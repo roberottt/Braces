@@ -3,6 +3,8 @@ import type { Lang } from "../i18n";
 
 export type Provider = "ollama" | "anthropic" | "openai" | "lmstudio" | "xai" | "gemini" | "mock";
 
+export type ToolPanelId = "ai" | "git" | "review";
+
 export type Tab = {
   id: string;
   title: string;
@@ -27,6 +29,10 @@ export type TerminalStore = {
   /** Whether terminal sessions and block history persist across app restarts. */
   persistSessions: boolean;
   sidePanelOpen: boolean;
+  /** Custom width (px) per tool panel, set by dragging its left edge; null = default CSS width. */
+  panelWidth: Record<ToolPanelId, number | null>;
+  /** Tool panel currently maximized over the whole workspace, if any. */
+  panelMaximized: ToolPanelId | null;
   metricsOpen: boolean;
   theme: string;
   // Error intelligence
@@ -79,6 +85,8 @@ export const [store, setStore] = createStore<TerminalStore>({
   hydrated: false,
   persistSessions: (localStorage.getItem("braces_persist_sessions") ?? "true") !== "false",
   sidePanelOpen: false,
+  panelWidth: { ai: null, git: null, review: null },
+  panelMaximized: null,
   metricsOpen: false,
   theme: "neon-noir",
   errorPanelOpen: false,

@@ -866,21 +866,27 @@ const BracesTerminal: Component<Props> = (props) => {
 
     // Exit detection (two independent signals, both safe against Claude Code's
     // mid-conversation title churn — Claude never sets either of these):
-    //   1. Our custom prompt's [CWD:…] marker (pwsh, and cmd once the prompt redraws).
+    //   1. Our custom prompt's [CWD:…] marker, emitted as OSC 1337 (see shellInit.ts).
+    //      It must NOT be an OSC 0 (title) sequence: Windows ConPTY intercepts title-set
+    //      sequences and never forwards a child's title, so an OSC 0 marker is invisible
+    //      to us. OSC 1337 passes through ConPTY (and real PTYs) verbatim.
     //   2. ConPTY restoring the shell's own executable title (e.g.
     //      "C:\WINDOWS\system32\cmd.exe") when the foreground program exits. On cmd.exe
     //      this is often the ONLY signal that arrives, because the [CWD:] prompt redraw
     //      doesn't always surface after a full-screen child exits.
     // A short grace window after launch ignores the transient cmd.exe title that can
     // appear before the launched program takes over the console.
-    const SHELL_TITLE = /(?:cmd|powershell|pwsh|bash|sh|zsh)(?:\.exe)?\s*$/i;
-    term.parser.registerOscHandler(0, (data) => {
+    term.parser.registerOscHandler(1337, (data) => {
       if (data.startsWith("[CWD:")) {
         const { cwd, exitCode } = parseCwdMarker(data);
         if (cwd) setTabCwd(cwd);
         if (isInteractive()) { exitInteractive(); closeBlock(exitCode); }
         return true;
       }
+      return false;
+    });
+    const SHELL_TITLE = /(?:cmd|powershell|pwsh|bash|sh|zsh)(?:\.exe)?\s*$/i;
+    term.parser.registerOscHandler(0, (data) => {
       if (isInteractive() && SHELL_TITLE.test(data) && Date.now() - interactiveStartedAt > 800) {
         exitInteractive();
         closeBlock(null); // shell-title fallback carries no exit-code info
@@ -922,6 +928,16 @@ const BracesTerminal: Component<Props> = (props) => {
       // (stopPropagation via its cancel()), so the window keydown handler in App.tsx
       // never fires. Returning false makes xterm ignore it and lets it bubble up.
       if (e.type === "keydown" && e.ctrlKey && !e.altKey && e.key === "Tab") {
+        return false;
+      }
+      // Windows/Linux Ctrl+V inside Claude Code: xterm would send it to the PTY as
+      // \x16 and cancel the event, so the browser paste event (which handleXtermPaste
+      // needs to pick up images) never fires. Returning false skips xterm's handling
+      // and lets the native paste happen: images go through handleXtermPaste, text
+      // falls through to xterm's own paste listener. Only for Claude sessions —
+      // other TUIs (e.g. vim's visual block) need the literal \x16.
+      if (e.type === "keydown" && !isMac && e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey
+          && e.key.toLowerCase() === "v" && isClaudeSession()) {
         return false;
       }
       // macOS Cmd+←/→ inside Claude Code: jump to start/end of line. The terminal
@@ -974,13 +990,13 @@ const BracesTerminal: Component<Props> = (props) => {
 
     // ── PTY data routing ────────────────────────────────────────────────────
     // Interactive mode: bytes go to xterm (primary) + raw scan (backup).
-    //   Primary: xterm OSC parser fires the registerOscHandler(0) handler above
+    //   Primary: xterm OSC parser fires the registerOscHandler(1337) handler above
     //            when the shell prompt marker [CWD:…] appears. Handles fragmentation.
     //   Backup:  raw string scan of the last 64 bytes detects the marker synchronously
     //            in case xterm's handler doesn't fire (e.g. parser state edge-cases).
     // Non-interactive: detect an indirect TUI launch via the alternate-screen-on seq.
     const ALT_ON      = /\x1b\[\?(?:1049|1047|47)h/;
-    const PROMPT_MARK = "\x1b]0;[CWD:";
+    const PROMPT_MARK = "\x1b]1337;[CWD:";
     // Shell-executable title restored by ConPTY on program exit (backup for the OSC 0
     // handler above). NOT \x1b[?2004l — Claude Code emits that on every response cycle.
     const SHELL_TITLE_SEQ = /\x1b\]0;[^\x07\x1b]*(?:cmd|powershell|pwsh)(?:\.exe)?[^\x07\x1b]*(?:\x07|\x1b\\)/i;
@@ -1015,7 +1031,7 @@ const BracesTerminal: Component<Props> = (props) => {
           const cwdMark = scan.includes(PROMPT_MARK);
           const shellMark = Date.now() - interactiveStartedAt > 800 && SHELL_TITLE_SEQ.test(scan);
           if (cwdMark || shellMark) {
-            const m = /\x1b\]0;(\[CWD:[^\x07\x1b\]]*\])/.exec(scan);
+            const m = /\x1b\]1337;(\[CWD:[^\x07\x1b\]]*\])/.exec(scan);
             const parsed = m ? parseCwdMarker(m[1]) : null;
             if (parsed?.cwd) setTabCwd(parsed.cwd);
             exitInteractive();
@@ -1029,7 +1045,7 @@ const BracesTerminal: Component<Props> = (props) => {
 
       titleBuf = (titleBuf + text).slice(-512);
 
-      const osc0 = /\x1b\]0;(\[CWD:[^\x07\x1b\]]*\])(?:\x07|\x1b\\)/.exec(titleBuf);
+      const osc0 = /\x1b\]1337;(\[CWD:[^\x07\x1b\]]*\])(?:\x07|\x1b\\)/.exec(titleBuf);
 
       // Append this chunk's text BEFORE closing the block below. A command that
       // fails almost instantly (e.g. `ssh` with no host, a missing binary) can have
