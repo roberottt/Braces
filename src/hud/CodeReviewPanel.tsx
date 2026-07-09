@@ -4,6 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { store, setStore } from "../store/terminalStore";
 import { t } from "../i18n";
+import PanelSizeControls from "./PanelSizeControls";
+import PanelResizeHandle from "./PanelResizeHandle";
 
 const REVIEW_PROMPT = (diff: string) =>
   `You are a senior software engineer doing a code review. Analyze the following git diff and give concise, actionable feedback grouped by file. Focus on: bugs, security issues, logic errors, and significant style problems. Be direct.\n\n\`\`\`diff\n${diff}\n\`\`\``;
@@ -123,12 +125,20 @@ const CodeReviewPanel: Component = () => {
   const lines = createMemo(() => review().split("\n"));
 
   return (
-    <div class="side-panel">
+    <div
+      class="side-panel"
+      classList={{ maximized: store.panelMaximized === "review" }}
+      style={store.panelWidth.review != null && store.panelMaximized !== "review"
+        ? { width: `${store.panelWidth.review}px`, "min-width": `${store.panelWidth.review}px` }
+        : undefined}
+    >
+      <PanelResizeHandle panel="review" />
       <div class="hud-corners"><span class="hc-br" /><span class="hc-bl" /></div>
 
       <div class="sp-header">
         <span class="sp-title">{t(store.language, "code_review_title")}</span>
         <div class="sp-header-actions">
+          <PanelSizeControls panel="review" />
           <button class="sp-header-btn close" title={t(store.language, "close")}
             onClick={() => setStore("codeReviewOpen", false)}>✕</button>
         </div>
