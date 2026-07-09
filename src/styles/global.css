@@ -694,8 +694,10 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   gap: 8px;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
+/* Focus cue is deliberately quiet: the border brightens a touch (neutral, not
+   themed) and the chevron lights up — see .wib-chevron below. */
 .wib:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  border-color: color-mix(in srgb, var(--fg) 24%, transparent);
 }
 
 
@@ -739,12 +741,14 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
 }
 
 .wib-chevron {
-  color: var(--accent);
+  color: var(--fg-dim);
   font-size: 15px;
   line-height: 1;
   flex-shrink: 0;
   user-select: none;
+  transition: color 0.2s ease;
 }
+.wib:focus-within .wib-chevron { color: var(--accent); }
 
 /* Wrapper that stacks ghost text behind the real input */
 .wib-input-wrap {
