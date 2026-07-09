@@ -930,6 +930,16 @@ const BracesTerminal: Component<Props> = (props) => {
       if (e.type === "keydown" && e.ctrlKey && !e.altKey && e.key === "Tab") {
         return false;
       }
+      // Windows/Linux Ctrl+V inside Claude Code: xterm would send it to the PTY as
+      // \x16 and cancel the event, so the browser paste event (which handleXtermPaste
+      // needs to pick up images) never fires. Returning false skips xterm's handling
+      // and lets the native paste happen: images go through handleXtermPaste, text
+      // falls through to xterm's own paste listener. Only for Claude sessions —
+      // other TUIs (e.g. vim's visual block) need the literal \x16.
+      if (e.type === "keydown" && !isMac && e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey
+          && e.key.toLowerCase() === "v" && isClaudeSession()) {
+        return false;
+      }
       // macOS Cmd+←/→ inside Claude Code: jump to start/end of line. The terminal
       // has no native meaning for Cmd+arrows, so translate to the readline bindings
       // Claude Code understands (Ctrl+A / Ctrl+E).
