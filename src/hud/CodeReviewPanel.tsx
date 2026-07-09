@@ -6,9 +6,10 @@ import { store, setStore } from "../store/terminalStore";
 import { t } from "../i18n";
 import PanelSizeControls from "./PanelSizeControls";
 import PanelResizeHandle from "./PanelResizeHandle";
+import { shiftWheelScroll } from "./shiftWheelScroll";
 
 const REVIEW_PROMPT = (diff: string) =>
-  `You are a senior software engineer doing a code review. Analyze the following git diff and give concise, actionable feedback grouped by file. Focus on: bugs, security issues, logic errors, and significant style problems. Be direct.\n\n\`\`\`diff\n${diff}\n\`\`\``;
+  `You are a senior software engineer doing a code review. Analyze the following git diff and give concise, actionable feedback grouped by file. Focus on: bugs, security issues, logic errors, and significant style problems. Be direct. Always wrap code, diff excerpts and commands in fenced code blocks (\`\`\`), never as plain text.\n\n\`\`\`diff\n${diff}\n\`\`\``;
 
 function renderInline(text: string): JSX.Element {
   const parts: JSX.Element[] = [];
@@ -64,6 +65,32 @@ function renderLine(line: string): JSX.Element {
     return <div class="rv-spacer" />;
   }
   return <div class="rv-p">{renderInline(line)}</div>;
+}
+
+type ReviewSegment =
+  | { kind: "code"; text: string }
+  | { kind: "line"; text: string };
+
+/** Split the review into plain lines and fenced code blocks (``` … ```). */
+function parseSegments(text: string): ReviewSegment[] {
+  const out: ReviewSegment[] = [];
+  let codeBuf: string[] | null = null;
+  for (const line of text.split("\n")) {
+    if (/^```/.test(line)) {
+      if (codeBuf !== null) {
+        out.push({ kind: "code", text: codeBuf.join("\n") });
+        codeBuf = null;
+      } else {
+        codeBuf = [];
+      }
+      continue;
+    }
+    if (codeBuf !== null) codeBuf.push(line);
+    else out.push({ kind: "line", text: line });
+  }
+  // Unterminated fence — happens mid-stream; render what we have so far.
+  if (codeBuf !== null) out.push({ kind: "code", text: codeBuf.join("\n") });
+  return out;
 }
 
 const CodeReviewPanel: Component = () => {
@@ -122,7 +149,7 @@ const CodeReviewPanel: Component = () => {
     }
   };
 
-  const lines = createMemo(() => review().split("\n"));
+  const segments = createMemo(() => parseSegments(review()));
 
   return (
     <div
@@ -174,7 +201,7 @@ const CodeReviewPanel: Component = () => {
         <div class="review-error">{error()}</div>
       </Show>
 
-      <div class="sp-messages">
+      <div class="sp-messages review-scroll" onWheel={shiftWheelScroll}>
         <Show when={!review() && !streaming() && !error()}>
           <div class="sp-empty">
             {t(store.language, "review_empty_hint")}
@@ -185,7 +212,13 @@ const CodeReviewPanel: Component = () => {
         </Show>
         <Show when={review()}>
           <div class="review-body">
-            <For each={lines()}>{(line) => renderLine(line)}</For>
+            <For each={segments()}>
+              {(seg) =>
+                seg.kind === "code"
+                  ? <pre class="rv-codeblock">{seg.text}</pre>
+                  : renderLine(seg.text)
+              }
+            </For>
           </div>
         </Show>
       </div>
