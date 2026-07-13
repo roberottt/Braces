@@ -151,6 +151,19 @@ pub fn run() {
             git::commands::git_dir_children,
             git::commands::git_diff_all,
             git::commands::git_checkout,
+            git::commands::git_push,
+            git::commands::git_pull,
+            git::commands::git_fetch,
+            git::commands::git_log,
+            git::commands::git_commit_files,
+            git::commands::git_show_file,
+            git::commands::git_branches,
+            git::commands::git_branch_create,
+            git::commands::git_branch_delete,
+            git::commands::git_stash_list,
+            git::commands::git_stash_push,
+            git::commands::git_stash_apply,
+            git::commands::git_stash_drop,
         ])
         .run(tauri::generate_context!())
         .expect("braces failed to start");
