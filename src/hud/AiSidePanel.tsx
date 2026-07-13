@@ -1,4 +1,4 @@
-import { Component, createSignal, For, Show, onMount } from "solid-js";
+import { Component, createEffect, createSignal, For, Show, onMount } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { store, setStore } from "../store/terminalStore";
@@ -166,6 +166,16 @@ const AiSidePanel: Component = () => {
       await persistActiveChat();
     }
   };
+
+  // Prompt queued from elsewhere in the app (e.g. a block's "explain with AI"
+  // action). Runs on mount too, so it also covers the panel-was-closed case;
+  // if a response is streaming, it fires again once streaming ends.
+  createEffect(() => {
+    const pending = store.pendingAiPrompt;
+    if (!pending || streaming()) return;
+    setStore("pendingAiPrompt", null);
+    send(pending);
+  });
 
   const applyFix = () => {
     const allContent = chatStore.messages

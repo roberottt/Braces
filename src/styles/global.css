@@ -437,6 +437,37 @@ html[data-platform="macos"] .status-bar .win-controls { display: none; }
   50%       { opacity: 0.25; }
 }
 
+/* ── block hover actions ──────────────────────────────────────────────────── */
+
+.cmd-block-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.cmd-block:hover .cmd-block-actions,
+.cmd-block-actions:focus-within { opacity: 1; }
+
+.cmd-block-action {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--fg-dim);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 5px;
+  transition: all 0.1s;
+}
+.cmd-block-action:hover {
+  color: var(--accent);
+  border-color: var(--border);
+  background: var(--bg-tertiary);
+}
+.cmd-block-action.md { font-size: 8px; font-weight: 700; letter-spacing: 0.04em; }
+
 .cmd-block-cmd {
   display: flex;
   align-items: center;

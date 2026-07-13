@@ -122,6 +122,15 @@ const T = {
     drop_stash_confirm_pre:  "Drop \"",
     drop_stash_confirm_post: "\"? This cannot be undone.",
 
+    // Command block actions
+    block_rerun:           "Re-run",
+    block_copy_cmd:        "Copy command",
+    block_copy_output:     "Copy output",
+    block_copy_md:         "Copy as Markdown",
+    block_explain_ai:      "Explain with AI",
+    block_exit_label:      "exit",
+    explain_prompt:        "Explain the output of this command and, if there is an error, how to fix it:",
+
     // Error panel
     analyzing:             "Analyzing…",
     analysis_failed:       "Analysis failed — is an AI provider configured?",
@@ -328,6 +337,15 @@ const T = {
     git_stash_drop:        "Eliminar",
     drop_stash_confirm_pre:  "¿Eliminar \"",
     drop_stash_confirm_post: "\"? No se puede deshacer.",
+
+    // Command block actions
+    block_rerun:           "Volver a ejecutar",
+    block_copy_cmd:        "Copiar comando",
+    block_copy_output:     "Copiar salida",
+    block_copy_md:         "Copiar como Markdown",
+    block_explain_ai:      "Explicar con IA",
+    block_exit_label:      "salida",
+    explain_prompt:        "Explica la salida de este comando y, si hay un error, cómo solucionarlo:",
 
     // Error panel
     analyzing:             "Analizando…",

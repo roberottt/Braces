@@ -681,6 +681,64 @@ const BracesTerminal: Component<Props> = (props) => {
     sendRaw((raw || "") + "\r");
   };
 
+  // ── Block actions (hover toolbar on each command block) ─────────────────────
+
+  // Transient "✓ copied" feedback: holds "<blockId>:<action>" for ~1.2 s.
+  const [copiedKey, setCopiedKey] = createSignal<string | null>(null);
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedKey(key);
+      if (copiedTimer) clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => setCopiedKey(null), 1200);
+    }).catch(() => {});
+  };
+
+  // htmlOutput joins lines with <br> (see ansiToHtml), so restore newlines
+  // before stripping the markup.
+  const blockPlainOutput = (b: CommandBlock): string => {
+    const div = document.createElement("div");
+    div.innerHTML = b.htmlOutput.replace(/<br\s*\/?>/gi, "\n");
+    return div.textContent ?? "";
+  };
+
+  const blockToMarkdown = (b: CommandBlock): string => {
+    const out = blockPlainOutput(b).replace(/\s+$/, "");
+    const meta: string[] = [];
+    if (b.cwd && b.cwd !== "~") meta.push(`\`${b.cwd}\``);
+    if (b.exitCode !== null) meta.push(`${t(store.language, "block_exit_label")} ${b.exitCode}`);
+    if (b.endTime) {
+      const ms = b.endTime - b.startTime;
+      meta.push(ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(2)}s`);
+    }
+    return "```console\n$ " + b.cmd + (out ? "\n" + out : "") + "\n```"
+      + (meta.length ? "\n_" + meta.join(" · ") + "_" : "");
+  };
+
+  const rerunBlock = (cmd: string) => {
+    // While something is running (or a TUI owns the pane) only prefill the
+    // input — typing into the PTY mid-run would feed the running program.
+    setCmdText(cmd);
+    if (hasRunningBlock() || isInteractive()) {
+      inputRef?.focus();
+      return;
+    }
+    submitCmd();
+  };
+
+  // Hand the block to the AI side panel as a queued prompt; the panel sends it
+  // as soon as it mounts (or immediately if already open).
+  const explainBlock = (b: CommandBlock) => {
+    const out = blockPlainOutput(b);
+    // Keep the tail — that's where errors live — within a sane prompt budget.
+    const MAX_OUT = 6000;
+    const clipped = out.length > MAX_OUT ? "…" + out.slice(-MAX_OUT) : out;
+    const exit = b.exitCode !== null ? ` (${t(store.language, "block_exit_label")} ${b.exitCode})` : "";
+    const prompt = `${t(store.language, "explain_prompt")}\n\n$ ${b.cmd}${exit}\n${clipped}`;
+    setStore("pendingAiPrompt", prompt);
+    setStore("sidePanelOpen", true);
+  };
+
   // Auto-scroll the selected history item into view.
   createEffect(() => {
     if (!showHistPanel()) return;
@@ -1370,6 +1428,26 @@ const BracesTerminal: Component<Props> = (props) => {
                         onClick={() => sendRaw("\x03")}
                       >■</button>
                     </Show>
+                    <div class="cmd-block-actions">
+                      <button class="cmd-block-action" title={t(store.language, "block_rerun")}
+                        onClick={() => rerunBlock(block().cmd)}>↻</button>
+                      <button class="cmd-block-action" title={t(store.language, "block_copy_cmd")}
+                        onClick={() => copyToClipboard(block().cmd, block().id + ":cmd")}>
+                        {copiedKey() === block().id + ":cmd" ? "✓" : "⧉"}
+                      </button>
+                      <Show when={!!block().htmlOutput}>
+                        <button class="cmd-block-action" title={t(store.language, "block_copy_output")}
+                          onClick={() => copyToClipboard(blockPlainOutput(block()), block().id + ":out")}>
+                          {copiedKey() === block().id + ":out" ? "✓" : "≡"}
+                        </button>
+                        <button class="cmd-block-action md" title={t(store.language, "block_copy_md")}
+                          onClick={() => copyToClipboard(blockToMarkdown(block()), block().id + ":md")}>
+                          {copiedKey() === block().id + ":md" ? "✓" : "MD"}
+                        </button>
+                        <button class="cmd-block-action" title={t(store.language, "block_explain_ai")}
+                          onClick={() => explainBlock(block())}>✦</button>
+                      </Show>
+                    </div>
                   </div>
                   <div class="cmd-block-cmd">
                     <span class="cmd-block-chevron">❯</span>
