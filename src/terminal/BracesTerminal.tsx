@@ -294,20 +294,20 @@ const BracesTerminal: Component<Props> = (props) => {
   // stdin-mode below depends on to ever release the input again.
   const [shellHasMarker, setShellHasMarker] = createSignal(false);
   const hasRunningBlock = createMemo(() => blocks().some(b => !b.done));
-  // A command is still running in this tab: the input bar is disabled so
-  // long-running programs (dev servers, watchers) visibly "own" the terminal
-  // until they exit or the user interrupts them with Ctrl+C. Gated on
-  // shellHasMarker because without the prompt marker we can never detect the
-  // command finishing, and the input would stay locked forever.
-  const inputLocked = () => shellHasMarker() && hasRunningBlock() && !isInteractive();
+  // A command is still running in this tab: the input bar switches to stdin
+  // mode — whatever the user types is sent to the running program's stdin on
+  // Enter (answering prompts like ssh's "yes/no" or a sudo password) instead
+  // of being queued as a new shell command. Gated on shellHasMarker because
+  // without the prompt marker we can never detect the command finishing, and
+  // the input would stay in stdin mode forever.
+  const stdinMode = () => shellHasMarker() && hasRunningBlock() && !isInteractive();
 
-  // Disabling the input while a command runs blurs it (focus falls to <body>,
-  // where the global Ctrl+C handler below picks up the interrupt); once the
-  // command ends, hand focus straight back so the user can keep typing.
+  // When the command ends, pull focus back to the input in case the user
+  // clicked into the block output while it was running.
   createEffect((prev: boolean | undefined) => {
-    const locked = inputLocked();
-    if (prev && !locked) setTimeout(() => inputRef?.focus(), 0);
-    return locked;
+    const running = stdinMode();
+    if (prev && !running) setTimeout(() => inputRef?.focus(), 0);
+    return running;
   });
 
   // Persist blocks to SQLite. Saves ALL blocks with a command — NOT just the ones
@@ -374,6 +374,7 @@ const BracesTerminal: Component<Props> = (props) => {
 
   const suggestion = createMemo(() => {
     if (showTabPanel()) return "";
+    if (stdinMode()) return ""; // typing goes to the running program, not the shell
     const text = cmdText();
     if (!text) return "";
     return cmdHistory().find(h => h.cmd.startsWith(text) && h.cmd !== text)?.cmd ?? "";
@@ -776,6 +777,25 @@ const BracesTerminal: Component<Props> = (props) => {
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    // ── Stdin mode: a command is running, so the input feeds its stdin ───
+    // Enter sends the typed line straight to the PTY (the program's own echo
+    // shows it in the block; password prompts stay hidden). No history entry,
+    // no new block, and none of the panels (history/completion) may open.
+    if (stdinMode()) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const text = cmdText();
+        setCmdText("");
+        sendRaw(text + "\r");
+        return;
+      }
+      if (e.ctrlKey && e.key === "c") { e.preventDefault(); setCmdText(""); sendRaw("\x03"); return; }
+      if (e.ctrlKey && e.key === "d") { e.preventDefault(); sendRaw("\x04"); return; }
+      if (e.key === "Escape") { e.preventDefault(); sendRaw("\x1b"); return; }
+      if (e.key === "Tab" || e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+      return;
+    }
+
     const hist = cmdHistory();
 
     // ── Tab completion panel navigation ──────────────────────────────────
@@ -1684,10 +1704,10 @@ const BracesTerminal: Component<Props> = (props) => {
                 onKeyDown={handleKeyDown}
                 placeholder={
                   !ptyReady() ? t(store.language, "connecting_ph")
-                  : inputLocked() ? t(store.language, "running_locked_ph")
+                  : stdinMode() ? t(store.language, "running_stdin_ph")
                   : t(store.language, "run_commands_ph")
                 }
-                disabled={!ptyReady() || inputLocked()}
+                disabled={!ptyReady()}
                 autocomplete="off"
                 spellcheck={false}
               />
