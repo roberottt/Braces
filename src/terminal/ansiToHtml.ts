@@ -249,19 +249,55 @@ export class TermScreen {
     }
   }
 
-  /** Wrap plain-text URLs in the rendered HTML with clickable anchors. */
-  private static linkifyLine(html: string): string {
-    // Only match text nodes (between tags), not tag attributes.
-    return html.replace(/(<[^>]*>)|([^<]+)/g, (_, tag, text) => {
-      if (tag) return tag;
-      return text.replace(/https?:\/\/[^\s<>]+/g, (raw: string) => {
+  /**
+   * URLs and file paths worth turning into clickable anchors. One combined
+   * pattern with the URL alternative first, so a URL's path segment is never
+   * re-matched as a file path.
+   *
+   * File paths match compiler/stack-trace shapes: `src/App.tsx:12:5`,
+   * `./x.js:3`, `/abs/main.rs:7`, `C:\proj\a.cs:4` and tsc's `src/a.ts(12,5)`.
+   * A bare name needs either a separator or a line suffix (`main.rs:12`) to
+   * qualify — a lone `foo.ts` in prose stays plain text.
+   */
+  private static readonly LINK_RE =
+    /(https?:\/\/[^\s<>"']+)|((?:[A-Za-z]:[\\/]|\/)?(?:[\w.@+-]+[\\/])*[\w@+-][\w.@+-]*\.[A-Za-z0-9]{1,8}(?::\d+(?::\d+)?|\(\d+(?:,\d+)?\))?)/g;
+
+  /**
+   * Find link ranges in a line's PLAIN text. Detection must run on the whole
+   * line, not per style run: programs routinely style one token with several
+   * colours (vite renders `http://localhost:` cyan and the port bold), which
+   * splits the URL across spans and used to cut the link short.
+   */
+  private static findLinks(text: string): { start: number; end: number; attrs: string }[] {
+    const links: { start: number; end: number; attrs: string }[] = [];
+    for (const m of text.matchAll(TermScreen.LINK_RE)) {
+      const idx = m.index ?? 0;
+      if (m[1]) {
         // Trim trailing punctuation that typically isn't part of the URL.
-        const display = raw.replace(/[.,;:!?)"']+$/, '');
-        const trailing = raw.slice(display.length);
-        // data-url holds the HTML-escaped URL; dataset.url decodes entities automatically.
-        return `<a class="term-link" data-url="${display}" title="Ctrl+Click to open">${display}</a>${trailing}`;
-      });
-    });
+        const display = m[1].replace(/[.,;:!?)"']+$/, '');
+        if (!display) continue;
+        links.push({
+          start: idx,
+          end: idx + display.length,
+          attrs: `data-url="${esc(display)}" title="Ctrl+Click to open"`,
+        });
+      } else {
+        // File path: split the optional :line:col / (line,col) suffix.
+        const s = /^(.*?)(?::(\d+)(?::(\d+))?|\((\d+)(?:,(\d+))?\))?$/.exec(m[2]);
+        if (!s) continue;
+        const path = s[1];
+        const line = s[2] ?? s[4] ?? '';
+        const col  = s[3] ?? s[5] ?? '';
+        // Bare `word.ext` with no separator and no line number is too ambiguous.
+        if (!line && !/[\\/]/.test(path)) continue;
+        links.push({
+          start: idx,
+          end: idx + m[2].length,
+          attrs: `data-file="${esc(path)}" data-line="${line}" data-col="${col}" title="Ctrl+Click to open in editor"`,
+        });
+      }
+    }
+    return links;
   }
 
   /** Render the current grid to HTML. Trailing blank lines/cells are trimmed. */
@@ -278,6 +314,12 @@ export class TermScreen {
       let end = line.length;
       while (end > 0 && line[end - 1].ch === ' ' && line[end - 1].css === '') end--;
 
+      // Link detection runs on the line's plain text so a link split across
+      // several style runs is still matched whole.
+      let text = '';
+      for (let c = 0; c < end; c++) text += (line[c] ?? BLANK).ch;
+      const links = TermScreen.findLinks(text);
+
       let lineHtml = '';
       let runCss = '';
       let runText = '';
@@ -286,13 +328,23 @@ export class TermScreen {
         lineHtml += runCss ? `<span style="${runCss}">${esc(runText)}</span>` : esc(runText);
         runText = '';
       };
+      let li = 0; // next link to open/close (ranges are sorted, non-overlapping)
       for (let c = 0; c < end; c++) {
+        if (li < links.length && c === links[li].start) {
+          flushRun();
+          lineHtml += `<a class="term-link" ${links[li].attrs}>`;
+        }
         const cell = line[c] ?? BLANK;
         if (cell.css !== runCss) { flushRun(); runCss = cell.css; }
         runText += cell.ch;
+        if (li < links.length && c === links[li].end - 1) {
+          flushRun();
+          lineHtml += '</a>';
+          li++;
+        }
       }
       flushRun();
-      out.push(TermScreen.linkifyLine(lineHtml));
+      out.push(lineHtml);
     }
     return out.join('<br>');
   }

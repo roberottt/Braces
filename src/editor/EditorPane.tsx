@@ -8,6 +8,7 @@ import { editorViews, savedContent } from "./bufferCache";
 import { editorTheme, editorHighlighting } from "./theme";
 import { languageExtensionFor } from "./languages";
 import { applyGutterMarks, gitGutterExtension, type FileDiff } from "./gitGutter";
+import { pendingGoto, gotoLine } from "./openInEditor";
 
 type Props = {
   tab: EditorTab;
@@ -61,6 +62,15 @@ const EditorPane: Component<Props> = (props) => {
     }
   };
 
+  // Jump queued by openFileInEditor (e.g. a clicked `file:line` in a block)
+  // once the view is attached and laid out.
+  const consumePendingGoto = (view: EditorView) => {
+    const goto = pendingGoto.get(props.tab.id);
+    if (!goto) return;
+    pendingGoto.delete(props.tab.id);
+    requestAnimationFrame(() => gotoLine(view, goto.line, goto.col));
+  };
+
   onMount(() => {
     const gitRefreshHandler = () => {
       const view = editorViews.get(props.tab.id);
@@ -80,6 +90,7 @@ const EditorPane: Component<Props> = (props) => {
       // the Git panel, which isn't mounted while the editor view is active.
       // Re-check disk content now that we're reconnecting.
       reloadIfExternallyChanged(existing);
+      consumePendingGoto(existing);
       return;
     }
 
@@ -121,6 +132,7 @@ const EditorPane: Component<Props> = (props) => {
       });
       editorViews.set(props.tab.id, view);
       refreshGutter(view);
+      consumePendingGoto(view);
     })();
   });
 

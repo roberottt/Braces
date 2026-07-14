@@ -10,6 +10,7 @@ import { isMac } from "../platform";
 import { t } from "../i18n";
 import { getShellInitScript } from "./shellInit";
 import { TermScreen, mkScreen } from "./ansiToHtml";
+import { openFileInEditor } from "../editor/openInEditor";
 import NewSessionWelcome from "./NewSessionWelcome";
 import "@xterm/xterm/css/xterm.css";
 
@@ -726,6 +727,19 @@ const BracesTerminal: Component<Props> = (props) => {
     submitCmd();
   };
 
+  // Ctrl+Click on a file:line link in block output → open it in the editor at
+  // that exact position. Relative paths resolve against the block's cwd.
+  const openBlockFile = (file: string, blockCwd: string, line?: string, col?: string) => {
+    const isAbs = /^(?:[A-Za-z]:[\\/]|\/)/.test(file);
+    let path = file.replace(/^\.\//, "");
+    if (!isAbs) {
+      const base = blockCwd && blockCwd !== "~" ? blockCwd : tabCwd();
+      if (!base || base === "~") return;
+      path = base.replace(/[\\/]+$/, "") + "/" + path;
+    }
+    openFileInEditor(path, line ? parseInt(line, 10) : undefined, col ? parseInt(col, 10) : undefined);
+  };
+
   // Hand the block to the AI side panel as a queued prompt; the panel sends it
   // as soon as it mounts (or immediately if already open).
   const explainBlock = (b: CommandBlock) => {
@@ -1379,12 +1393,18 @@ const BracesTerminal: Component<Props> = (props) => {
           // Re-arm (never disarm) when the user arrives back at the bottom.
           if (isNearBottom()) followBottom = true;
         }} onClick={(e) => {
-          if (!e.ctrlKey) return;
-          const a = (e.target as HTMLElement).closest?.('a[data-url]') as HTMLElement | null;
+          if (!e.ctrlKey && !(isMac && e.metaKey)) return;
+          const a = (e.target as HTMLElement).closest?.('a[data-url], a[data-file]') as HTMLElement | null;
           if (!a) return;
           e.preventDefault();
           const url = a.dataset.url ?? '';
-          if (url) shellOpen(url).catch(() => {});
+          if (url) { shellOpen(url).catch(() => {}); return; }
+          const file = a.dataset.file ?? '';
+          if (!file) return;
+          // Resolve relative paths against the cwd the block ran in, not the
+          // tab's current cwd — the user may have cd'd away since.
+          const blockCwd = (a.closest('.cmd-block') as HTMLElement | null)?.dataset.cwd || tabCwd();
+          openBlockFile(file, blockCwd, a.dataset.line, a.dataset.col);
         }}>
           <Show when={blocks().length === 0 && ptyReady() && !isInteractive()}>
             <NewSessionWelcome cwd={tabCwd()} />
@@ -1409,7 +1429,7 @@ const BracesTerminal: Component<Props> = (props) => {
                 : "err";
 
               return (
-                <div class={`cmd-block ${statusCls()}`}>
+                <div class={`cmd-block ${statusCls()}`} data-cwd={block().cwd}>
                   <div class="cmd-block-header">
                     <span class="cmd-block-cwd">⬡ {blockCwd()}</span>
                     <Show when={block().done && block().exitCode !== null}>
