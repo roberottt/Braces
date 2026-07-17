@@ -1,7 +1,7 @@
 import { createStore } from "solid-js/store";
 import type { Lang } from "../i18n";
 
-export type Provider = "ollama" | "anthropic" | "openai" | "lmstudio" | "xai" | "gemini" | "mock";
+export type Provider = "ollama" | "anthropic" | "openai" | "lmstudio" | "xai" | "gemini" | "nvidia" | "mock";
 
 export type ToolPanelId = "ai" | "git" | "review";
 
