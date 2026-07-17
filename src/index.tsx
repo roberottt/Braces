@@ -1,6 +1,6 @@
 import { render } from "solid-js/web";
 import App from "./App";
-import { isMac } from "./platform";
+import { isMac, isLinux } from "./platform";
 import "./styles/global.css";
 
 // Platform flag for CSS: on macOS the window uses native decorations with the
@@ -8,6 +8,11 @@ import "./styles/global.css";
 // buttons are hidden and the status bar leaves room on the left.
 if (isMac) {
   document.documentElement.dataset.platform = "macos";
+} else if (isLinux) {
+  // On Linux the window is opaque (transparency is unreliable on WebKitGTK),
+  // so the rounded corners would expose the WebView's default background.
+  // Square them off and give the shell an opaque backdrop.
+  document.documentElement.dataset.platform = "linux";
 }
 
 const root = document.getElementById("root")!;

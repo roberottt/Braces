@@ -193,6 +193,14 @@ html[data-platform="macos"] .app { border-radius: 0; }
 html[data-platform="macos"] .status-bar { padding-left: 100px; padding-right: 14px; }
 html[data-platform="macos"] .status-bar .win-controls { display: none; }
 
+/* Linux: the window is opaque (WebKitGTK transparency is unreliable), so the
+   rounded corners would expose the WebView's default background in the corners.
+   Square them off and paint an opaque backdrop behind the shell. */
+html[data-platform="linux"],
+html[data-platform="linux"] body,
+html[data-platform="linux"] #root { background: var(--bg-primary); }
+html[data-platform="linux"] .app { border-radius: 0; }
+
 /* ── Workspace ───────────────────────────────────────────────────────────── */
 /* Holds both the terminal workspace and the full-window editor. The workspace
    is never unmounted (that would kill its PTYs); when the editor is open it is
