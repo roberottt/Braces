@@ -70,6 +70,45 @@ pub struct GitTreeNode {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GitCommit {
+    pub hash: String,
+    pub short_hash: String,
+    pub author: String,
+    /// Relative date, e.g. "2 days ago" (git `%ar`)
+    pub date: String,
+    pub subject: String,
+    /// Branch / tag decorations pointing at this commit (git `%D`)
+    pub refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommitFile {
+    pub path: String,
+    pub status: Option<GitStatusKind>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitBranch {
+    pub name: String,
+    pub is_current: bool,
+    pub is_remote: bool,
+    pub upstream: Option<String>,
+    /// Relative committer date of the branch tip
+    pub last_date: String,
+    pub last_subject: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitStashEntry {
+    pub index: u32,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GitDiffLine {
     pub origin: char,        // ' ', '+', '-'
     pub content: String,
@@ -127,7 +166,7 @@ pub async fn run_git(cwd: &str, args: &[&str]) -> Result<String, String> {
 
 // ─── porcelain-v2 parser ─────────────────────────────────────────────────────
 
-fn xy_to_kind(c: char) -> Option<GitStatusKind> {
+pub fn xy_to_kind(c: char) -> Option<GitStatusKind> {
     match c {
         'M' => Some(GitStatusKind::Modified),
         'A' => Some(GitStatusKind::Added),

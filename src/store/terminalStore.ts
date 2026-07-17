@@ -63,6 +63,9 @@ export type TerminalStore = {
   gitDeletions: number;
   gitSelectedFile: string | null;
   gitSelectedStaged: boolean;
+  // Prompt queued for the AI side panel (e.g. "explain this block"); the panel
+  // consumes and clears it on mount / when it changes.
+  pendingAiPrompt: string | null;
   // Editor view
   currentView: "terminal" | "editor";
   editorTabs: EditorTab[];
@@ -113,6 +116,7 @@ export const [store, setStore] = createStore<TerminalStore>({
   gitDeletions: 0,
   gitSelectedFile: null,
   gitSelectedStaged: false,
+  pendingAiPrompt: null,
   // Editor view
   currentView: "terminal",
   editorTabs: [],

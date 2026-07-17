@@ -10,6 +10,7 @@ import { isMac } from "../platform";
 import { t } from "../i18n";
 import { getShellInitScript } from "./shellInit";
 import { TermScreen, mkScreen } from "./ansiToHtml";
+import { openFileInEditor } from "../editor/openInEditor";
 import NewSessionWelcome from "./NewSessionWelcome";
 import "@xterm/xterm/css/xterm.css";
 
@@ -293,20 +294,20 @@ const BracesTerminal: Component<Props> = (props) => {
   // stdin-mode below depends on to ever release the input again.
   const [shellHasMarker, setShellHasMarker] = createSignal(false);
   const hasRunningBlock = createMemo(() => blocks().some(b => !b.done));
-  // A command is still running in this tab: the input bar is disabled so
-  // long-running programs (dev servers, watchers) visibly "own" the terminal
-  // until they exit or the user interrupts them with Ctrl+C. Gated on
-  // shellHasMarker because without the prompt marker we can never detect the
-  // command finishing, and the input would stay locked forever.
-  const inputLocked = () => shellHasMarker() && hasRunningBlock() && !isInteractive();
+  // A command is still running in this tab: the input bar switches to stdin
+  // mode — whatever the user types is sent to the running program's stdin on
+  // Enter (answering prompts like ssh's "yes/no" or a sudo password) instead
+  // of being queued as a new shell command. Gated on shellHasMarker because
+  // without the prompt marker we can never detect the command finishing, and
+  // the input would stay in stdin mode forever.
+  const stdinMode = () => shellHasMarker() && hasRunningBlock() && !isInteractive();
 
-  // Disabling the input while a command runs blurs it (focus falls to <body>,
-  // where the global Ctrl+C handler below picks up the interrupt); once the
-  // command ends, hand focus straight back so the user can keep typing.
+  // When the command ends, pull focus back to the input in case the user
+  // clicked into the block output while it was running.
   createEffect((prev: boolean | undefined) => {
-    const locked = inputLocked();
-    if (prev && !locked) setTimeout(() => inputRef?.focus(), 0);
-    return locked;
+    const running = stdinMode();
+    if (prev && !running) setTimeout(() => inputRef?.focus(), 0);
+    return running;
   });
 
   // Persist blocks to SQLite. Saves ALL blocks with a command — NOT just the ones
@@ -373,6 +374,7 @@ const BracesTerminal: Component<Props> = (props) => {
 
   const suggestion = createMemo(() => {
     if (showTabPanel()) return "";
+    if (stdinMode()) return ""; // typing goes to the running program, not the shell
     const text = cmdText();
     if (!text) return "";
     return cmdHistory().find(h => h.cmd.startsWith(text) && h.cmd !== text)?.cmd ?? "";
@@ -681,6 +683,77 @@ const BracesTerminal: Component<Props> = (props) => {
     sendRaw((raw || "") + "\r");
   };
 
+  // ── Block actions (hover toolbar on each command block) ─────────────────────
+
+  // Transient "✓ copied" feedback: holds "<blockId>:<action>" for ~1.2 s.
+  const [copiedKey, setCopiedKey] = createSignal<string | null>(null);
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedKey(key);
+      if (copiedTimer) clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => setCopiedKey(null), 1200);
+    }).catch(() => {});
+  };
+
+  // htmlOutput joins lines with <br> (see ansiToHtml), so restore newlines
+  // before stripping the markup.
+  const blockPlainOutput = (b: CommandBlock): string => {
+    const div = document.createElement("div");
+    div.innerHTML = b.htmlOutput.replace(/<br\s*\/?>/gi, "\n");
+    return div.textContent ?? "";
+  };
+
+  const blockToMarkdown = (b: CommandBlock): string => {
+    const out = blockPlainOutput(b).replace(/\s+$/, "");
+    const meta: string[] = [];
+    if (b.cwd && b.cwd !== "~") meta.push(`\`${b.cwd}\``);
+    if (b.exitCode !== null) meta.push(`${t(store.language, "block_exit_label")} ${b.exitCode}`);
+    if (b.endTime) {
+      const ms = b.endTime - b.startTime;
+      meta.push(ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(2)}s`);
+    }
+    return "```console\n$ " + b.cmd + (out ? "\n" + out : "") + "\n```"
+      + (meta.length ? "\n_" + meta.join(" · ") + "_" : "");
+  };
+
+  const rerunBlock = (cmd: string) => {
+    // While something is running (or a TUI owns the pane) only prefill the
+    // input — typing into the PTY mid-run would feed the running program.
+    setCmdText(cmd);
+    if (hasRunningBlock() || isInteractive()) {
+      inputRef?.focus();
+      return;
+    }
+    submitCmd();
+  };
+
+  // Ctrl+Click on a file:line link in block output → open it in the editor at
+  // that exact position. Relative paths resolve against the block's cwd.
+  const openBlockFile = (file: string, blockCwd: string, line?: string, col?: string) => {
+    const isAbs = /^(?:[A-Za-z]:[\\/]|\/)/.test(file);
+    let path = file.replace(/^\.\//, "");
+    if (!isAbs) {
+      const base = blockCwd && blockCwd !== "~" ? blockCwd : tabCwd();
+      if (!base || base === "~") return;
+      path = base.replace(/[\\/]+$/, "") + "/" + path;
+    }
+    openFileInEditor(path, line ? parseInt(line, 10) : undefined, col ? parseInt(col, 10) : undefined);
+  };
+
+  // Hand the block to the AI side panel as a queued prompt; the panel sends it
+  // as soon as it mounts (or immediately if already open).
+  const explainBlock = (b: CommandBlock) => {
+    const out = blockPlainOutput(b);
+    // Keep the tail — that's where errors live — within a sane prompt budget.
+    const MAX_OUT = 6000;
+    const clipped = out.length > MAX_OUT ? "…" + out.slice(-MAX_OUT) : out;
+    const exit = b.exitCode !== null ? ` (${t(store.language, "block_exit_label")} ${b.exitCode})` : "";
+    const prompt = `${t(store.language, "explain_prompt")}\n\n$ ${b.cmd}${exit}\n${clipped}`;
+    setStore("pendingAiPrompt", prompt);
+    setStore("sidePanelOpen", true);
+  };
+
   // Auto-scroll the selected history item into view.
   createEffect(() => {
     if (!showHistPanel()) return;
@@ -704,6 +777,25 @@ const BracesTerminal: Component<Props> = (props) => {
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    // ── Stdin mode: a command is running, so the input feeds its stdin ───
+    // Enter sends the typed line straight to the PTY (the program's own echo
+    // shows it in the block; password prompts stay hidden). No history entry,
+    // no new block, and none of the panels (history/completion) may open.
+    if (stdinMode()) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const text = cmdText();
+        setCmdText("");
+        sendRaw(text + "\r");
+        return;
+      }
+      if (e.ctrlKey && e.key === "c") { e.preventDefault(); setCmdText(""); sendRaw("\x03"); return; }
+      if (e.ctrlKey && e.key === "d") { e.preventDefault(); sendRaw("\x04"); return; }
+      if (e.key === "Escape") { e.preventDefault(); sendRaw("\x1b"); return; }
+      if (e.key === "Tab" || e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+      return;
+    }
+
     const hist = cmdHistory();
 
     // ── Tab completion panel navigation ──────────────────────────────────
@@ -1321,12 +1413,18 @@ const BracesTerminal: Component<Props> = (props) => {
           // Re-arm (never disarm) when the user arrives back at the bottom.
           if (isNearBottom()) followBottom = true;
         }} onClick={(e) => {
-          if (!e.ctrlKey) return;
-          const a = (e.target as HTMLElement).closest?.('a[data-url]') as HTMLElement | null;
+          if (!e.ctrlKey && !(isMac && e.metaKey)) return;
+          const a = (e.target as HTMLElement).closest?.('a[data-url], a[data-file]') as HTMLElement | null;
           if (!a) return;
           e.preventDefault();
           const url = a.dataset.url ?? '';
-          if (url) shellOpen(url).catch(() => {});
+          if (url) { shellOpen(url).catch(() => {}); return; }
+          const file = a.dataset.file ?? '';
+          if (!file) return;
+          // Resolve relative paths against the cwd the block ran in, not the
+          // tab's current cwd — the user may have cd'd away since.
+          const blockCwd = (a.closest('.cmd-block') as HTMLElement | null)?.dataset.cwd || tabCwd();
+          openBlockFile(file, blockCwd, a.dataset.line, a.dataset.col);
         }}>
           <Show when={blocks().length === 0 && ptyReady() && !isInteractive()}>
             <NewSessionWelcome cwd={tabCwd()} />
@@ -1351,7 +1449,7 @@ const BracesTerminal: Component<Props> = (props) => {
                 : "err";
 
               return (
-                <div class={`cmd-block ${statusCls()}`}>
+                <div class={`cmd-block ${statusCls()}`} data-cwd={block().cwd}>
                   <div class="cmd-block-header">
                     <span class="cmd-block-cwd">⬡ {blockCwd()}</span>
                     <Show when={block().done && block().exitCode !== null}>
@@ -1370,6 +1468,26 @@ const BracesTerminal: Component<Props> = (props) => {
                         onClick={() => sendRaw("\x03")}
                       >■</button>
                     </Show>
+                    <div class="cmd-block-actions">
+                      <button class="cmd-block-action" title={t(store.language, "block_rerun")}
+                        onClick={() => rerunBlock(block().cmd)}>↻</button>
+                      <button class="cmd-block-action" title={t(store.language, "block_copy_cmd")}
+                        onClick={() => copyToClipboard(block().cmd, block().id + ":cmd")}>
+                        {copiedKey() === block().id + ":cmd" ? "✓" : "⧉"}
+                      </button>
+                      <Show when={!!block().htmlOutput}>
+                        <button class="cmd-block-action" title={t(store.language, "block_copy_output")}
+                          onClick={() => copyToClipboard(blockPlainOutput(block()), block().id + ":out")}>
+                          {copiedKey() === block().id + ":out" ? "✓" : "≡"}
+                        </button>
+                        <button class="cmd-block-action md" title={t(store.language, "block_copy_md")}
+                          onClick={() => copyToClipboard(blockToMarkdown(block()), block().id + ":md")}>
+                          {copiedKey() === block().id + ":md" ? "✓" : "MD"}
+                        </button>
+                        <button class="cmd-block-action" title={t(store.language, "block_explain_ai")}
+                          onClick={() => explainBlock(block())}>✦</button>
+                      </Show>
+                    </div>
                   </div>
                   <div class="cmd-block-cmd">
                     <span class="cmd-block-chevron">❯</span>
@@ -1586,10 +1704,10 @@ const BracesTerminal: Component<Props> = (props) => {
                 onKeyDown={handleKeyDown}
                 placeholder={
                   !ptyReady() ? t(store.language, "connecting_ph")
-                  : inputLocked() ? t(store.language, "running_locked_ph")
+                  : stdinMode() ? t(store.language, "running_stdin_ph")
                   : t(store.language, "run_commands_ph")
                 }
-                disabled={!ptyReady() || inputLocked()}
+                disabled={!ptyReady()}
                 autocomplete="off"
                 spellcheck={false}
               />

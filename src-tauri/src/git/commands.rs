@@ -1,8 +1,14 @@
 use std::collections::HashMap;
 use super::{
-    run_git, parse_porcelain_v2, parse_unified_diff, sum_numstat,
-    GitBranchInfo, GitFileDiff, GitRepoInfo, GitStatus, GitStatusKind, GitTreeNode,
+    run_git, parse_porcelain_v2, parse_unified_diff, sum_numstat, xy_to_kind,
+    GitBranch, GitBranchInfo, GitCommit, GitCommitFile, GitFileDiff, GitRepoInfo,
+    GitStashEntry, GitStatus, GitStatusKind, GitTreeNode,
 };
+
+/// Unit separator / record separator — safe field delimiters for parsing
+/// git output that may contain spaces, colons, quotes, etc.
+const FS: char = '\u{1f}';
+const RS: char = '\u{1e}';
 
 // ─── file-tree constants ──────────────────────────────────────────────────────
 
@@ -285,4 +291,212 @@ pub async fn git_diff_all(cwd: String, staged: bool) -> Result<String, String> {
     let mut args = vec!["diff", "--no-color"];
     if staged { args.push("--cached"); }
     run_git(&cwd, &args).await
+}
+
+// ─── remote sync ─────────────────────────────────────────────────────────────
+
+/// Push the current branch. When it has no upstream yet, publish it with
+/// `-u origin HEAD` so the first push from a new branch just works.
+#[tauri::command]
+pub async fn git_push(cwd: String) -> Result<(), String> {
+    let has_upstream = run_git(
+        &cwd,
+        &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+    )
+    .await
+    .is_ok();
+
+    let args: &[&str] = if has_upstream {
+        &["push"]
+    } else {
+        &["push", "-u", "origin", "HEAD"]
+    };
+    run_git(&cwd, args).await.map(|_| ())
+}
+
+#[tauri::command]
+pub async fn git_pull(cwd: String) -> Result<(), String> {
+    run_git(&cwd, &["pull"]).await.map(|_| ())
+}
+
+#[tauri::command]
+pub async fn git_fetch(cwd: String) -> Result<(), String> {
+    run_git(&cwd, &["fetch", "--all", "--prune"]).await.map(|_| ())
+}
+
+// ─── history ─────────────────────────────────────────────────────────────────
+
+/// Return `limit` commits starting `skip` entries back from HEAD.
+/// An empty repo (no commits yet) returns an empty list, not an error.
+#[tauri::command]
+pub async fn git_log(cwd: String, limit: u32, skip: u32) -> Result<Vec<GitCommit>, String> {
+    let format = format!("--format=%H{FS}%h{FS}%an{FS}%ar{FS}%s{FS}%D{RS}");
+    let limit_s = limit.to_string();
+    let skip_s = skip.to_string();
+    let raw = match run_git(&cwd, &["log", &format, "-n", &limit_s, "--skip", &skip_s]).await {
+        Ok(raw) => raw,
+        Err(e) if e.to_lowercase().contains("does not have any commits") => return Ok(vec![]),
+        Err(e) => return Err(e),
+    };
+
+    let commits = raw
+        .split(RS)
+        .filter_map(|rec| {
+            let rec = rec.trim_matches(['\n', '\r']);
+            let parts: Vec<&str> = rec.split(FS).collect();
+            if parts.len() != 6 || parts[0].is_empty() { return None; }
+            let refs = parts[5]
+                .split(", ")
+                .map(|r| r.trim().trim_start_matches("HEAD -> ").to_string())
+                .filter(|r| !r.is_empty() && r != "HEAD")
+                .collect();
+            Some(GitCommit {
+                hash: parts[0].to_string(),
+                short_hash: parts[1].to_string(),
+                author: parts[2].to_string(),
+                date: parts[3].to_string(),
+                subject: parts[4].to_string(),
+                refs,
+            })
+        })
+        .collect();
+    Ok(commits)
+}
+
+/// List the files touched by a single commit.
+#[tauri::command]
+pub async fn git_commit_files(cwd: String, hash: String) -> Result<Vec<GitCommitFile>, String> {
+    let raw = run_git(&cwd, &["show", "--name-status", "--format=", &hash]).await?;
+    let files = raw
+        .lines()
+        .filter_map(|line| {
+            let mut cols = line.split('\t');
+            let status = cols.next()?.chars().next()?;
+            // Renames/copies list "old\tnew" — show the new path
+            let path = cols.next_back()?.trim();
+            if path.is_empty() { return None; }
+            Some(GitCommitFile {
+                path: path.to_string(),
+                status: xy_to_kind(status),
+            })
+        })
+        .collect();
+    Ok(files)
+}
+
+/// Return the parsed diff for one file within one commit.
+/// `git show` (unlike `<hash>^..<hash>`) also works for the root commit.
+#[tauri::command]
+pub async fn git_show_file(cwd: String, hash: String, path: String) -> Result<GitFileDiff, String> {
+    let raw = run_git(&cwd, &["show", "--no-color", "--format=", &hash, "--", &path])
+        .await
+        .unwrap_or_default();
+    Ok(parse_unified_diff(&path, &raw))
+}
+
+// ─── branches ────────────────────────────────────────────────────────────────
+
+/// List local and remote branches sorted by most recent commit.
+#[tauri::command]
+pub async fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
+    let current = run_git(&cwd, &["rev-parse", "--abbrev-ref", "HEAD"])
+        .await
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|_| "HEAD".to_string());
+
+    // NB: for-each-ref hex escapes are "%1f", not the "%x1f" that log formats use
+    let format =
+        "--format=%(refname)%1f%(refname:short)%1f%(upstream:short)%1f%(committerdate:relative)%1f%(subject)";
+    let raw = run_git(
+        &cwd,
+        &["for-each-ref", "--sort=-committerdate", format, "refs/heads", "refs/remotes"],
+    )
+    .await?;
+
+    let branches = raw
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split(FS).collect();
+            if parts.len() != 5 { return None; }
+            let full = parts[0];
+            let name = parts[1].to_string();
+            let is_remote = full.starts_with("refs/remotes/");
+            // Skip symbolic remote HEAD pointers (refs/remotes/origin/HEAD)
+            if is_remote && full.ends_with("/HEAD") { return None; }
+            Some(GitBranch {
+                is_current: !is_remote && name == current,
+                is_remote,
+                upstream: if parts[2].is_empty() { None } else { Some(parts[2].to_string()) },
+                last_date: parts[3].to_string(),
+                last_subject: parts[4].to_string(),
+                name,
+            })
+        })
+        .collect();
+    Ok(branches)
+}
+
+/// Create a new branch at HEAD and switch to it.
+#[tauri::command]
+pub async fn git_branch_create(cwd: String, name: String) -> Result<(), String> {
+    run_git(&cwd, &["checkout", "-b", name.as_str()]).await.map(|_| ())
+}
+
+/// Delete a local branch (`-d`, or `-D` when `force`).
+#[tauri::command]
+pub async fn git_branch_delete(cwd: String, name: String, force: bool) -> Result<(), String> {
+    let flag = if force { "-D" } else { "-d" };
+    run_git(&cwd, &["branch", flag, name.as_str()]).await.map(|_| ())
+}
+
+// ─── stash ───────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn git_stash_list(cwd: String) -> Result<Vec<GitStashEntry>, String> {
+    let format = format!("--format=%gd{FS}%gs");
+    let raw = run_git(&cwd, &["stash", "list", &format]).await.unwrap_or_default();
+    let stashes = raw
+        .lines()
+        .filter_map(|line| {
+            let (gd, msg) = line.split_once(FS)?;
+            // "stash@{N}" → N
+            let index = gd
+                .trim_start_matches("stash@{")
+                .trim_end_matches('}')
+                .parse()
+                .ok()?;
+            Some(GitStashEntry { index, message: msg.trim().to_string() })
+        })
+        .collect();
+    Ok(stashes)
+}
+
+#[tauri::command]
+pub async fn git_stash_push(
+    cwd: String,
+    message: Option<String>,
+    include_untracked: bool,
+) -> Result<(), String> {
+    let mut args: Vec<&str> = vec!["stash", "push"];
+    if include_untracked { args.push("--include-untracked"); }
+    let msg = message.unwrap_or_default();
+    if !msg.trim().is_empty() {
+        args.push("-m");
+        args.push(msg.trim());
+    }
+    run_git(&cwd, &args).await.map(|_| ())
+}
+
+/// Apply a stash entry; `pop` also drops it on success.
+#[tauri::command]
+pub async fn git_stash_apply(cwd: String, index: u32, pop: bool) -> Result<(), String> {
+    let stash_ref = format!("stash@{{{index}}}");
+    let sub = if pop { "pop" } else { "apply" };
+    run_git(&cwd, &["stash", sub, &stash_ref]).await.map(|_| ())
+}
+
+#[tauri::command]
+pub async fn git_stash_drop(cwd: String, index: u32) -> Result<(), String> {
+    let stash_ref = format!("stash@{{{index}}}");
+    run_git(&cwd, &["stash", "drop", &stash_ref]).await.map(|_| ())
 }

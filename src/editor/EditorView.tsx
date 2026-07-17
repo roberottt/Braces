@@ -1,26 +1,18 @@
 import { Component, For, Show, onCleanup, onMount } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
-import { store, setStore, genEditorTabId } from "../store/terminalStore";
+import { store, setStore } from "../store/terminalStore";
 import { t } from "../i18n";
 import FileTree from "../hud/FileTree";
 import EditorTabBar from "./EditorTabBar";
 import EditorPane from "./EditorPane";
 import { editorViews, savedContent } from "./bufferCache";
+import { openFileInEditor } from "./openInEditor";
 
 const EditorView: Component = () => {
   const activeRelPath = () =>
     store.editorTabs.find((et) => et.id === store.activeEditorTabId)?.relPath ?? null;
 
-  const openInEditor = (relPath: string, name: string) => {
-    const existing = store.editorTabs.find((et) => et.relPath === relPath);
-    if (existing) {
-      setStore("activeEditorTabId", existing.id);
-    } else {
-      const id = genEditorTabId();
-      setStore("editorTabs", (tabs) => [...tabs, { id, relPath, title: name, dirty: false }]);
-      setStore("activeEditorTabId", id);
-    }
-  };
+  const openInEditor = (relPath: string, _name: string) => openFileInEditor(relPath);
 
   onMount(() => {
     const onKey = (e: KeyboardEvent) => {

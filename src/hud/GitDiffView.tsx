@@ -26,6 +26,8 @@ type GitFileDiff = {
 type Props = {
   path: string;
   staged: boolean;
+  /** When set, show the file's diff within this commit instead of the working tree. */
+  commit?: string;
 };
 
 const GitDiffView: Component<Props> = (props) => {
@@ -35,12 +37,15 @@ const GitDiffView: Component<Props> = (props) => {
   createEffect(async () => {
     const path   = props.path;
     const staged = props.staged;
+    const commit = props.commit;
     if (!path) { setDiff(null); return; }
     const cwd = store.cwd;
     if (!cwd || cwd === "~") return;
     setLoading(true);
     try {
-      const d = await invoke<GitFileDiff>("git_diff_file", { cwd, path, staged });
+      const d = commit
+        ? await invoke<GitFileDiff>("git_show_file", { cwd, hash: commit, path })
+        : await invoke<GitFileDiff>("git_diff_file", { cwd, path, staged });
       setDiff(d);
     } catch {
       setDiff(null);
