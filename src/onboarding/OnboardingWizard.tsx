@@ -2,10 +2,10 @@ import { Component, createSignal, Show } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { setStore } from "../store/terminalStore";
 
-const PROVIDERS = ["ollama", "anthropic", "openai", "lmstudio", "xai", "gemini"] as const;
+const PROVIDERS = ["ollama", "anthropic", "openai", "lmstudio", "xai", "gemini", "nvidia"] as const;
 type ProviderName = (typeof PROVIDERS)[number];
 
-const NEEDS_KEY: ProviderName[] = ["anthropic", "openai", "xai", "gemini"];
+const NEEDS_KEY: ProviderName[] = ["anthropic", "openai", "xai", "gemini", "nvidia"];
 const NEEDS_HOST: ProviderName[] = ["ollama", "lmstudio"];
 
 type Props = { onDone: () => void };
@@ -36,6 +36,7 @@ const OnboardingWizard: Component<Props> = (props) => {
   const DEFAULT_MODELS: Record<ProviderName, string> = {
     ollama: "llama3.2", anthropic: "claude-opus-4-8", openai: "gpt-4o-mini",
     lmstudio: "local-model", xai: "grok-3", gemini: "gemini-2.0-flash",
+    nvidia: "meta/llama-3.1-8b-instruct",
   };
 
   const finish = async () => {

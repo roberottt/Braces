@@ -13,13 +13,14 @@ const THEMES = [
   { id: "minimal",        label: "Stormtrooper",   accent: "#cccccc" },
 ] as const;
 
-const PROVIDERS: Provider[] = ["ollama", "anthropic", "openai", "lmstudio", "xai", "gemini"];
+const PROVIDERS: Provider[] = ["ollama", "anthropic", "openai", "lmstudio", "xai", "gemini", "nvidia"];
 
 const KEY_PROVIDERS = [
   { id: "anthropic", label: "Anthropic",  placeholder: "sk-ant-…" },
   { id: "openai",    label: "OpenAI",     placeholder: "sk-…" },
   { id: "xai",       label: "xAI (Grok)", placeholder: "xai-…" },
   { id: "gemini",    label: "Gemini",     placeholder: "AIza…" },
+  { id: "nvidia",    label: "NVIDIA NIM", placeholder: "nvapi-…" },
 ];
 
 const DEFAULT_MODELS: Partial<Record<Provider, string>> = {
@@ -29,6 +30,7 @@ const DEFAULT_MODELS: Partial<Record<Provider, string>> = {
   lmstudio:  "local-model",
   xai:       "grok-3",
   gemini:    "gemini-2.0-flash",
+  nvidia:    "meta/llama-3.1-8b-instruct",
 };
 
 const LANGS: { id: Lang; label: string }[] = [

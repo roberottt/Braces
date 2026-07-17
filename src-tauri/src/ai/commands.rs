@@ -1,7 +1,8 @@
 use crate::ai::provider::{AiProvider, ChatMessage, Context, Token};
 use crate::ai::providers::{
     anthropic::AnthropicProvider, gemini::GeminiProvider, lmstudio::LmStudioProvider,
-    mock::MockProvider, ollama::OllamaProvider, openai::OpenAiProvider, xai::XaiProvider,
+    mock::MockProvider, nvidia::NvidiaProvider, ollama::OllamaProvider, openai::OpenAiProvider,
+    xai::XaiProvider,
 };
 use crate::config::Config;
 use crate::context::{ContextStore, EmbeddingEntry, EntryKind};
@@ -83,6 +84,14 @@ fn make_named(
                 .or_else(|| pc.and_then(|p| p.model.clone()))
                 .unwrap_or_else(|| "grok-3".into());
             Some(Arc::new(XaiProvider::new(key, model)))
+        }
+        "nvidia" => {
+            let key = Vault::get("nvidia").ok()?;
+            let model = model_override
+                .map(|s| s.to_string())
+                .or_else(|| pc.and_then(|p| p.model.clone()))
+                .unwrap_or_else(|| "meta/llama-3.1-8b-instruct".into());
+            Some(Arc::new(NvidiaProvider::new(key, model)))
         }
         "gemini" => {
             let key = Vault::get("gemini").ok()?;
