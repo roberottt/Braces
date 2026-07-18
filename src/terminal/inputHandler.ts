@@ -107,8 +107,9 @@ export class InputHandler {
     if (data.length === 1 && data >= " ") {
       this.inputBuffer += data;
       this.send(data);
-      requestAutocomplete(this.inputBuffer, this.cwd, (ghost) => {
-        this.updateGhost(ghost?.suggestion ?? "");
+      const typed = this.inputBuffer;
+      requestAutocomplete(typed, { cwd: this.cwd, recent: [] }, (command) => {
+        this.updateGhost(command ? command.slice(typed.length) : "");
       });
     } else {
       // Control sequences, arrows, etc.

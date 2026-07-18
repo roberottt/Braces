@@ -1,4 +1,4 @@
-import { Component, For, Index, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import { Component, For, Index, Show, createEffect, createMemo, createSignal, onCleanup, onMount, untrack } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open as shellOpen } from "@tauri-apps/plugin-shell";
@@ -11,6 +11,7 @@ import { t } from "../i18n";
 import { getShellInitScript } from "./shellInit";
 import { TermScreen, mkScreen } from "./ansiToHtml";
 import { openFileInEditor } from "../editor/openInEditor";
+import { requestAutocomplete, requestNextCommand, cancelAutocomplete } from "../ai/autocomplete";
 import NewSessionWelcome from "./NewSessionWelcome";
 import "@xterm/xterm/css/xterm.css";
 
@@ -289,6 +290,8 @@ const BracesTerminal: Component<Props> = (props) => {
   let uiFlipTimer: ReturnType<typeof setTimeout> | undefined;
   const [interactiveCmd, setInteractiveCmd] = createSignal("");
   const [blocks, setBlocks] = createSignal<CommandBlock[]>([]);
+  // Bumped every time a command finishes; the next-command suggestion keys off it.
+  const [completedTick, setCompletedTick] = createSignal(0);
   // True while the shell emits the [CWD:…] prompt marker (zsh/bash/pwsh/cmd) —
   // the only shells where we can tell that a running block has finished, which
   // stdin-mode below depends on to ever release the input again.
@@ -372,16 +375,74 @@ const BracesTerminal: Component<Props> = (props) => {
     if (ghostRef) ghostRef.scrollLeft = x;
   };
 
+  // AI-predicted command for the current input, kept alongside the prefix that
+  // produced it so a stale suggestion is never shown against newer text.
+  const [aiSuggestion, setAiSuggestion] = createSignal<{ prefix: string; cmd: string } | null>(null);
+
+  const suggestionsEnabled = () => !showTabPanel() && !stdinMode();
+
   const suggestion = createMemo(() => {
-    if (showTabPanel()) return "";
-    if (stdinMode()) return ""; // typing goes to the running program, not the shell
+    if (!suggestionsEnabled()) return "";
     const text = cmdText();
+    // Prefer the AI prediction; fall back to history prefix matching whenever
+    // the feature is off, still in flight, or came back empty. On an empty
+    // prompt the AI suggestion (prefix "") is the only possible source.
+    if (store.aiSuggestions) {
+      const ai = aiSuggestion();
+      if (ai && ai.prefix === text && ai.cmd.startsWith(text)) return ai.cmd;
+    }
     if (!text) return "";
     return cmdHistory().find(h => h.cmd.startsWith(text) && h.cmd !== text)?.cmd ?? "";
   });
 
+  /** True when the ghost text currently on screen came from the AI, not history. */
+  const suggestionIsAi = createMemo(() => {
+    const ai = aiSuggestion();
+    return !!store.aiSuggestions && !!ai && ai.prefix === cmdText() && ai.cmd === suggestion();
+  });
+
   // Per-tab reactive accessors
   const tabCwd = () => store.tabs.find(t => t.id === props.tabId)?.cwd ?? "~";
+
+  // Ask the provider for a suggestion when the typed command settles, or — on an
+  // empty prompt right after a command finished — for the likely next command.
+  createEffect(() => {
+    const text = cmdText();
+    const tick = completedTick(); // re-run when a command completes
+    if (!store.aiSuggestions || !suggestionsEnabled()) {
+      cancelAutocomplete();
+      setAiSuggestion(null);
+      return;
+    }
+    // Context is read untracked: only the typed text and command completions
+    // should retrigger a request, not the background git poll.
+    const ctx = untrack(() => ({
+      cwd: tabCwd(),
+      recent: cmdHistory().slice(0, 10).map(h => h.cmd),
+      gitBranch: store.gitIsRepo ? store.gitBranch : undefined,
+    }));
+
+    if (!text) {
+      setAiSuggestion(null);
+      // Only offer an unprompted suggestion once something has actually run in
+      // this session, and never while a command is still executing — submitting
+      // clears the input, which would otherwise fire a request mid-run.
+      if (tick === 0 || hasRunningBlock() || isInteractive()) { cancelAutocomplete(); return; }
+      requestNextCommand(
+        {
+          ...ctx,
+          tabId: props.tabId,
+          lastExitCode: untrack(() => store.tabs.find(t => t.id === props.tabId)?.lastExitCode ?? null),
+        },
+        cmd => setAiSuggestion(cmd ? { prefix: "", cmd } : null),
+      );
+      return;
+    }
+
+    requestAutocomplete(text, ctx, cmd => setAiSuggestion(cmd ? { prefix: text, cmd } : null));
+  });
+
+  onCleanup(() => cancelAutocomplete());
 
   const setTabCwd = (cwdOrFn: string | ((prev: string) => string)) => {
     const current = tabCwd();
@@ -508,6 +569,8 @@ const BracesTerminal: Component<Props> = (props) => {
       return { ...b, htmlOutput: trimmed, done: true, exitCode, endTime: Date.now() };
     }));
     setTabExitCode(exitCode);
+    // Drives the "what should I run next?" suggestion on the now-empty prompt.
+    setCompletedTick(n => n + 1);
     activeBlockId = "";
     activeScreen = mkScreen();
     // Persist blocks to SQLite (errors surface in the console)
@@ -1690,7 +1753,12 @@ const BracesTerminal: Component<Props> = (props) => {
           <div class="wib-row">
             <span class="wib-chevron">❯</span>
             <div class="wib-input-wrap">
-              <div class="wib-ghost" aria-hidden="true" ref={ghostRef}>{suggestion()}</div>
+              <div class="wib-ghost" aria-hidden="true" ref={ghostRef}>
+                {suggestion()}
+                <Show when={suggestion() && suggestionIsAi()}>
+                  <span class="wib-ghost-badge">{t(store.language, "ai_badge")}</span>
+                </Show>
+              </div>
               <div class="wib-highlight" aria-hidden="true" ref={highlightRef}>
                 <span class="wib-hl-inner" innerHTML={highlightHtml()} />
               </div>
@@ -1705,6 +1773,9 @@ const BracesTerminal: Component<Props> = (props) => {
                 placeholder={
                   !ptyReady() ? t(store.language, "connecting_ph")
                   : stdinMode() ? t(store.language, "running_stdin_ph")
+                  // A next-command suggestion occupies the same space as the
+                  // placeholder, so drop the placeholder while one is showing.
+                  : suggestion() ? ""
                   : t(store.language, "run_commands_ph")
                 }
                 disabled={!ptyReady()}

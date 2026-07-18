@@ -59,7 +59,9 @@ Works on **Windows, macOS, and Linux**.
 
 **⚡ Full Claude Code integration** — run `claude` inside Braces and it works out of the box, exactly as it does in a native terminal: full interactive TUI support, `Shift+Enter` to insert newlines, and clipboard image pasting (paste a screenshot and Claude Code attaches it automatically).
 
-**Also included:** multi-tab sessions, tab completion, history panel with inline suggestions (`↑` / `→`), semantic history search (`Ctrl+R`), clickable URLs (`Ctrl+Click`), system metrics overlay (`Ctrl+Shift+M`), 5 themes, Spanish/English UI, and session persistence — your tabs and chats come back after a restart.
+**✨ Suggestions that follow what you're doing** — optionally, Braces predicts your next command from your working directory, git branch and recent commands, and shows it as ghost text (`→` to accept). It works two ways: while you type it completes what you've started, and on an empty prompt after a command finishes it proposes the next step on its own — including a diagnostic when the last command failed. Off by default; enable it in the first-run wizard or **Settings → AI**. While off, ghost text comes from prefix matching over your shell history, with no provider needed.
+
+**Also included:** multi-tab sessions, tab completion, history panel (`↑` / `→`), semantic history search (`Ctrl+R`), clickable URLs (`Ctrl+Click`), system metrics overlay (`Ctrl+Shift+M`), 5 themes, Spanish/English UI, and session persistence — your tabs and chats come back after a restart.
 
 ---
 
@@ -129,7 +131,7 @@ Providers are configured in `~/.config/braces/braces.toml`:
 [ai]
 primary  = "ollama"      # ollama | anthropic | openai | lmstudio | xai | gemini | nvidia
 fallback = "anthropic"
-autocomplete = true
+autocomplete = true      # master switch for AI command suggestions
 
 [providers.anthropic]
 model = "claude-opus-4-8"
@@ -144,13 +146,23 @@ embed_model = "nomic-embed-text"
 
 ### What the AI can do
 
-Whichever provider you pick drives these three features:
+Whichever provider you pick drives these four features:
 
 - **Chat panel** (`Ctrl+Shift+A`) — a conversation per tab, with an agentic loop that can run shell commands as tools and inject them straight into the active terminal. Chats persist across restarts.
 - **Code review** (`Ctrl+Shift+R`) — reviews your working diff in a side panel.
 - **Semantic history search** (`Ctrl+R`) — every command you run is embedded and indexed, so you can search history by meaning instead of exact text. Needs a provider that supports embeddings (see above); with Anthropic, Gemini or xAI as your only provider, commands are silently not indexed.
 
-Inline command suggestions (the ghost text as you type, `→` to accept) are **not** AI-driven — they're prefix matches against your own shell history, so they work with no provider configured.
+- **Command suggestions** (ghost text in the input bar, `→` to accept) — predicts the command you're about to run from what you're actually doing: your working directory, current git branch and recent commands. Two modes, both on the same toggle:
+  - *While typing* — completes the command you've started.
+  - *On an empty prompt* — about a second after a command finishes, proposes the next step unprompted. If the last command failed, it suggests something that diagnoses or fixes it instead.
+
+  AI-generated suggestions carry a small `AI` badge next to the ghost text, so you can always tell them from history matches.
+
+  **What gets sent:** while typing, only your commands, working directory and git branch. The empty-prompt suggestion additionally sends the **last 25 lines (max 2000 chars) of the previous command's output** — without it the model can't tell a dirty working tree from a clean one and suggests nonsense. That's a smaller window than the chat panel (`Ctrl+Shift+A`), which already sends 80 lines. If you don't want terminal output reaching your provider at all, leave AI suggestions off.
+
+AI command suggestions are **off by default** — they're the one feature here that calls your provider on its own, so Braces asks before spending your tokens. The first-run wizard offers them on the provider step, and you can flip them any time under **Settings → AI → AI command suggestions**; `autocomplete = false` in `braces.toml` disables them outright.
+
+While off, the ghost text falls back to plain prefix matching against your own shell history, which needs no provider configured. Braces also falls back to history automatically whenever the provider errors out or has nothing to suggest, so the input bar never blocks on the network.
 
 ---
 

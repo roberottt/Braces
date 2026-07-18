@@ -814,6 +814,20 @@ html[data-platform="linux"] .app { border-radius: 0; }
   z-index: 0;
 }
 
+/* Marks ghost text that came from the AI rather than from command history. */
+.wib-ghost-badge {
+  margin-left: 8px;
+  padding: 1px 5px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  color: var(--accent);
+  opacity: 0.75;
+  flex: none;
+}
+
 /* Syntax-highlight overlay: same metrics as the input, sits above the ghost and
    below the input. The input text itself is transparent so these colours show
    through while the caret (caret-color) stays visible. */
@@ -2000,6 +2014,21 @@ html[data-platform="linux"] .app { border-radius: 0; }
 .ow-step { color: var(--fg-dim); font-size: 10px; font-family: var(--font-label); margin-bottom: 20px; }
 
 .ow-field { margin-bottom: 16px; }
+
+/* Label + explanation on the left, toggle button pinned right. */
+.ow-field-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.ow-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-dim);
+}
 .ow-label { font-family: var(--font-label); font-size: 11px; color: var(--fg-mid); display: block; margin-bottom: 4px; }
 
 .ow-select,

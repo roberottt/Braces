@@ -111,6 +111,7 @@ pub fn run() {
             ai::commands::ai_chat,
             ai::commands::ai_nl_to_shell,
             ai::commands::ai_autocomplete,
+            ai::commands::ai_suggest_next,
             ai::commands::ai_analyze_error,
             ai::commands::ai_query_processes,
             // RAG + History
