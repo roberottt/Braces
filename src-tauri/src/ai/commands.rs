@@ -276,19 +276,175 @@ pub async fn ai_nl_to_shell(
     Ok(NlResult { command, explanation: None })
 }
 
-/// Return autocomplete suggestion for the current shell input.
+/// How much of the last command's output the next-command suggestion may see.
+/// Deliberately far smaller than the chat panel's 80 lines: this fires on its
+/// own after every command, so it should send as little as it can get away with.
+const OUTPUT_TAIL_LINES: usize = 25;
+const OUTPUT_TAIL_CHARS: usize = 2000;
+
+/// Pull a bare shell command out of a model reply.
+///
+/// Models routinely ignore "output only the command" and wrap the answer in a
+/// markdown fence, so a naive first-line read yields "```bash" and the whole
+/// suggestion gets thrown away. Skips fences and blank lines, then trims stray
+/// backticks off whatever it lands on.
+fn extract_command(reply: &str) -> String {
+    reply
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty() && !l.starts_with("```"))
+        .unwrap_or("")
+        .trim_matches('`')
+        .trim()
+        .to_string()
+}
+
+/// Return an AI command suggestion for the current shell input, using what the
+/// user is currently doing (working directory, git branch, recent commands) as
+/// context so the completion fits the session rather than the prefix alone.
 #[tauri::command]
 pub async fn ai_autocomplete(
     input: String,
-    _cwd: String,
+    cwd: String,
+    recent: Option<Vec<String>>,
+    git_branch: Option<String>,
+    provider_name: String,
+    model: String,
+    host: Option<String>,
     state: State<'_, Config>,
 ) -> Result<String, String> {
-    let provider = make_provider(state.inner());
+    // Config-file kill switch; the per-user toggle lives in Settings → AI.
+    if !state.ai.autocomplete {
+        return Ok(String::new());
+    }
+
+    // Use the provider the user picked in the UI, not the TOML primary — most
+    // users never create a config file, so the primary is the "ollama" default.
+    let provider = make_provider_explicit(&provider_name, &model, host.as_deref(), state.inner());
+
+    let mut context = format!("Working directory: {cwd}");
+    if let Some(branch) = git_branch.as_deref().filter(|b| !b.is_empty()) {
+        context.push_str(&format!("\nGit branch: {branch}"));
+    }
+    let recent = recent.unwrap_or_default();
+    if !recent.is_empty() {
+        context.push_str("\nRecent commands (most recent first):\n");
+        for cmd in recent.iter().take(10) {
+            context.push_str(&format!("- {cmd}\n"));
+        }
+    }
+
     let prompt = format!(
-        "Complete this shell command. Output ONLY the full completed command string.\n\nPrefix: {input}"
+        "You are a shell command completion engine for an interactive terminal.\n\
+         Given the session context and the partial command the user is typing, predict \
+         the single most likely full command they intend to run.\n\n\
+         Rules:\n\
+         - Output ONLY the command, on one line, with no markdown, quotes or explanation.\n\
+         - The output MUST start with the exact prefix the user has typed.\n\
+         - If you cannot make a confident prediction, output nothing.\n\n\
+         {context}\n\nPartial command: {input}"
     );
+
     let result = collect(provider, &prompt).await?;
-    Ok(result.lines().next().unwrap_or("").to_string())
+    let suggestion = extract_command(&result);
+
+    // Only return completions that actually extend what the user typed, so the
+    // caller can render the remainder as ghost text without rewriting the input.
+    if suggestion.starts_with(&input) && suggestion != input {
+        Ok(suggestion)
+    } else {
+        Ok(String::new())
+    }
+}
+
+/// Suggest the next command to run when the prompt is empty, based on the
+/// session so far. Deliberately takes no terminal output — only the commands
+/// themselves, the cwd and the git branch — so nothing printed to the screen is
+/// sent to the provider.
+#[tauri::command]
+pub async fn ai_suggest_next(
+    cwd: String,
+    recent: Option<Vec<String>>,
+    git_branch: Option<String>,
+    last_exit_code: Option<i32>,
+    active_tab_id: String,
+    provider_name: String,
+    model: String,
+    host: Option<String>,
+    state: State<'_, Config>,
+    pty: State<'_, PtyState>,
+) -> Result<String, String> {
+    if !state.ai.autocomplete {
+        return Ok(String::new());
+    }
+
+    let recent = recent.unwrap_or_default();
+    if recent.is_empty() {
+        return Ok(String::new());
+    }
+
+    let mut context = format!("Working directory: {cwd}");
+    if let Some(branch) = git_branch.as_deref().filter(|b| !b.is_empty()) {
+        context.push_str(&format!("\nGit branch: {branch}"));
+    }
+    if let Some(code) = last_exit_code {
+        context.push_str(&format!(
+            "\nThe last command {}.",
+            if code == 0 { "succeeded".to_string() } else { format!("failed with exit code {code}") }
+        ));
+    }
+    context.push_str("\nCommands run so far (most recent first):\n");
+    for cmd in recent.iter().take(10) {
+        context.push_str(&format!("- {cmd}\n"));
+    }
+
+    // The tail of what the last command actually printed. Without it the model
+    // is guessing from the command name alone — it cannot tell a dirty working
+    // tree from a clean one, so after `git status` it proposes things like
+    // `gh pr create` instead of `git add`.
+    let tail = {
+        let guard = pty.0.lock().unwrap();
+        guard
+            .get(&active_tab_id)
+            .map(|s| s.output.recent(OUTPUT_TAIL_LINES).join("\n"))
+            .unwrap_or_default()
+    };
+    let tail = strip_ansi(&tail);
+    let tail = tail.trim();
+    if !tail.is_empty() {
+        // Cap the payload: some commands emit megabytes, and only the end of the
+        // output says anything about what to do next. Counted in chars so a
+        // multi-byte boundary can never be split.
+        let total = tail.chars().count();
+        let clipped: String = tail
+            .chars()
+            .skip(total.saturating_sub(OUTPUT_TAIL_CHARS))
+            .collect();
+        context.push_str(&format!("\nOutput of the last command:\n```\n{clipped}\n```\n"));
+    }
+
+    let prompt = format!(
+        "You are a shell assistant watching an interactive terminal session.\n\
+         The user has just finished a command and the prompt is empty. Predict the \
+         single most likely command they will run next.\n\n\
+         Rules:\n\
+         - Output ONLY the command, on one line, with no markdown, quotes or explanation.\n\
+         - Base your answer on what the last command actually printed, not just its name.\n\
+         - Suggest a natural next step, not a repeat of the last command.\n\
+         - If the last command failed, suggest something that diagnoses or fixes it.\n\
+         - If you cannot make a confident prediction, output nothing.\n\n\
+         {context}"
+    );
+
+    let provider = make_provider_explicit(&provider_name, &model, host.as_deref(), state.inner());
+    let result = collect(provider, &prompt).await?;
+    let suggestion = extract_command(&result);
+
+    // Never echo the command that just ran back as a suggestion.
+    if recent.first().is_some_and(|last| last == &suggestion) {
+        return Ok(String::new());
+    }
+    Ok(suggestion)
 }
 
 /// Analyze the last N lines of terminal output and suggest a fix.
@@ -450,4 +606,46 @@ pub async fn ai_query_processes(
         "Given this list of running processes, answer: {query}\n\nProcesses:\n{procs_text}\n\nAnswer concisely."
     );
     collect(provider, &prompt).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_command;
+
+    #[test]
+    fn takes_a_bare_command() {
+        assert_eq!(extract_command("git status"), "git status");
+        assert_eq!(extract_command("  git status  \n"), "git status");
+    }
+
+    #[test]
+    fn unwraps_markdown_fences() {
+        assert_eq!(extract_command("```bash\ngit status\n```"), "git status");
+        assert_eq!(extract_command("```\nnpm run dev\n```"), "npm run dev");
+    }
+
+    #[test]
+    fn strips_inline_backticks() {
+        assert_eq!(extract_command("`cargo test`"), "cargo test");
+    }
+
+    #[test]
+    fn skips_leading_blank_lines() {
+        assert_eq!(extract_command("\n\n\ncargo build\n"), "cargo build");
+    }
+
+    #[test]
+    fn ignores_trailing_prose() {
+        assert_eq!(
+            extract_command("git push\nThis pushes your commits."),
+            "git push"
+        );
+    }
+
+    #[test]
+    fn empty_reply_yields_empty() {
+        assert_eq!(extract_command(""), "");
+        assert_eq!(extract_command("\n  \n"), "");
+        assert_eq!(extract_command("```"), "");
+    }
 }

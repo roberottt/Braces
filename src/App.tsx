@@ -7,6 +7,7 @@ import AiSidePanel from "./hud/AiSidePanel";
 import ErrorPanel from "./hud/ErrorPanel";
 import MetricsOverlay from "./hud/MetricsOverlay";
 import OnboardingWizard from "./onboarding/OnboardingWizard";
+import AiSuggestionsPrompt from "./onboarding/AiSuggestionsPrompt";
 import SettingsModal from "./settings/SettingsModal";
 import TabSidebar from "./hud/TabSidebar";
 import GitPanel from "./hud/GitPanel";
@@ -19,9 +20,11 @@ import { t } from "./i18n";
 import { isMac } from "./platform";
 
 const FIRST_RUN_KEY = "braces_setup_done";
+const AI_SUGGESTIONS_KEY = "braces_ai_suggestions";
 
 const App: Component = () => {
   const [showOnboarding, setShowOnboarding] = createSignal(false);
+  const [showAiSuggestionsPrompt, setShowAiSuggestionsPrompt] = createSignal(false);
   // ── git status: refresh whenever cwd changes ─────────────────────────────
   const refreshGit = async (cwd: string) => {
     if (!cwd || cwd === "~") return;
@@ -110,6 +113,11 @@ const App: Component = () => {
 
     if (!localStorage.getItem(FIRST_RUN_KEY)) {
       setShowOnboarding(true);
+    } else if (localStorage.getItem(AI_SUGGESTIONS_KEY) === null) {
+      // Onboarded before AI suggestions shipped, so the wizard never offered the
+      // choice. Ask once. Checked against null, not falsiness — an explicit
+      // "false" is a real answer and must not re-prompt.
+      setShowAiSuggestionsPrompt(true);
     }
 
     try {
@@ -237,11 +245,21 @@ const App: Component = () => {
     setShowOnboarding(false);
   };
 
+  const onAiSuggestionsChoice = (enabled: boolean) => {
+    setStore("aiSuggestions", enabled);
+    localStorage.setItem(AI_SUGGESTIONS_KEY, String(enabled));
+    setShowAiSuggestionsPrompt(false);
+  };
+
   return (
     <div class="app" data-theme={store.theme}>
 
       <Show when={showOnboarding()}>
         <OnboardingWizard onDone={onOnboardingDone} />
+      </Show>
+
+      <Show when={showAiSuggestionsPrompt()}>
+        <AiSuggestionsPrompt onChoose={onAiSuggestionsChoice} />
       </Show>
 
       <StatusBar />

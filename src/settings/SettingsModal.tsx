@@ -74,6 +74,12 @@ const SettingsModal: Component = () => {
     localStorage.setItem("braces_persist_sessions", String(next));
   };
 
+  const toggleAiSuggestions = () => {
+    const next = !store.aiSuggestions;
+    setStore("aiSuggestions", next);
+    localStorage.setItem("braces_ai_suggestions", String(next));
+  };
+
   const setLang = (l: Lang) => {
     setStore("language", l);
     localStorage.setItem("braces_language", l);
@@ -232,10 +238,17 @@ const SettingsModal: Component = () => {
 
             <div class="sfield sfield-row">
               <div>
-                <label class="slabel">{tr("autocomplete")}</label>
-                <p class="sdesc">{tr("autocomplete_desc")}</p>
+                <label class="slabel">{tr("ai_suggestions")}</label>
+                <p class="sdesc">
+                  {store.aiSuggestions ? tr("ai_suggestions_desc") : tr("ai_suggestions_off_desc")}
+                </p>
               </div>
-              <button class="stoggle on">{tr("on")}</button>
+              <button
+                class={`stoggle${store.aiSuggestions ? " on" : ""}`}
+                onClick={toggleAiSuggestions}
+              >
+                {store.aiSuggestions ? tr("on") : tr("off")}
+              </button>
             </div>
 
             <div class="sinfo">

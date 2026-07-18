@@ -23,6 +23,8 @@ const OnboardingWizard: Component<Props> = (props) => {
     { id: "minimal",        label: "Stormtrooper" },
   ];
   const [theme, setTheme] = createSignal("neon-noir");
+  // Opt-in feature: the wizard offers it, but it stays off unless chosen here.
+  const [aiSuggestions, setAiSuggestions] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
 
@@ -49,11 +51,13 @@ const OnboardingWizard: Component<Props> = (props) => {
       setStore("provider", p as any);
       setStore("model", model);
       setStore("theme", theme());
+      setStore("aiSuggestions", aiSuggestions());
       document.documentElement.setAttribute("data-theme", theme());
       // Persist so the choices survive a restart (App.tsx reads these on boot).
       localStorage.setItem("braces_provider", p);
       localStorage.setItem("braces_model", model);
       localStorage.setItem("braces_theme", theme());
+      localStorage.setItem("braces_ai_suggestions", String(aiSuggestions()));
       if (NEEDS_HOST.includes(p) && host().trim()) {
         localStorage.setItem(`braces_host_${p}`, host().trim());
       }
@@ -123,6 +127,24 @@ const OnboardingWizard: Component<Props> = (props) => {
               />
             </div>
           </Show>
+
+          <div class="ow-field ow-field-row">
+            <div>
+              <label class="ow-label">AI COMMAND SUGGESTIONS</label>
+              <p class="ow-hint">
+                Predicts the command you're about to run from your working directory,
+                git branch and recent commands. Off by default — leave it off and
+                suggestions come from your own command history instead. You can change
+                this any time in Settings → AI.
+              </p>
+            </div>
+            <button
+              class={`stoggle${aiSuggestions() ? " on" : ""}`}
+              onClick={() => setAiSuggestions(v => !v)}
+            >
+              {aiSuggestions() ? "ON" : "OFF"}
+            </button>
+          </div>
         </Show>
 
         {/* Step 1: Visual theme */}
@@ -151,6 +173,10 @@ const OnboardingWizard: Component<Props> = (props) => {
           <div style={{ color: "var(--fg-mid)", "font-size": "13px", "line-height": "1.8" }}>
             <div><span style={{ color: "var(--accent)" }}>Provider:</span> {provider()}</div>
             <div><span style={{ color: "var(--accent)" }}>Theme:</span> {THEMES.find(t => t.id === theme())?.label ?? theme()}</div>
+            <div>
+              <span style={{ color: "var(--accent)" }}>AI suggestions:</span>{" "}
+              {aiSuggestions() ? "on" : "off — using command history"}
+            </div>
           </div>
           <p style={{ "margin-top": "16px", "font-size": "11px", color: "var(--fg-dim)" }}>
             API keys are encrypted with AES-256-GCM and stored in the OS keychain.
