@@ -49,7 +49,7 @@ Works on **Windows, macOS, and Linux**.
 
 **🤖 AI at your side** (`Ctrl+Shift+A`) — chat with an AI agent that can run shell commands, analyze the last error (`▲`), and inject a one-click fix (`⚡`) into your input. Supports multiple conversations, all saved across restarts.
 
-**🔌 Bring your own AI** — works with Anthropic, OpenAI, Gemini, xAI/Grok, or fully local models via Ollama and LM Studio. API keys are encrypted and stored in your OS keychain, never in plain text.
+**🔌 Bring your own AI** — works with Anthropic, OpenAI, Gemini, xAI/Grok, NVIDIA NIM, or fully local models via Ollama and LM Studio. API keys are encrypted and stored in your OS keychain, never in plain text. See [AI providers](#ai-providers) for the full list.
 
 **📝 Built-in code editor** (`Ctrl+E`) — a full editor with file tree, tabs, syntax highlighting, and live git gutters. Edit, save (`Ctrl+S`), and get back to your shell.
 
@@ -88,6 +88,69 @@ The app is not notarized, so macOS will block it on first launch ("Braces is dam
 ```sh
 xattr -cr /Applications/Braces.app
 ```
+
+---
+
+## AI providers
+
+Braces talks to seven AI backends. Pick one in the setup wizard, or change it any time in **Settings → AI** (`Ctrl+,`).
+
+| Provider | API endpoint | Default model | API key | Streaming |
+|---|---|---|---|---|
+| **Anthropic** | `api.anthropic.com/v1/messages` | `claude-opus-4-8` | `sk-ant-…` | ✅ |
+| **OpenAI** | `api.openai.com/v1` | `gpt-4o-mini` | `sk-…` | ✅ |
+| **Gemini** | `generativelanguage.googleapis.com/v1beta` | `gemini-2.0-flash` | `AIza…` | ✅ |
+| **xAI (Grok)** | `api.x.ai/v1` | `grok-3` | `xai-…` | ✅ |
+| **NVIDIA NIM** | `integrate.api.nvidia.com/v1` | `meta/llama-3.1-8b-instruct` | `nvapi-…` | ✅ |
+| **Ollama** (local) | `http://localhost:11434` | `llama3.2` | — | ✅ |
+| **LM Studio** (local) | `http://localhost:1234` | `local-model` | — | ✅ |
+
+The OpenAI-compatible providers (OpenAI, xAI, NVIDIA NIM, LM Studio) all speak the same `/chat/completions` protocol, so any model those services expose works — just type its name in the model field.
+
+### Embeddings
+
+Semantic history search (`Ctrl+R`) and the RAG context index need an embedding model. Only some providers offer one:
+
+| Provider | Embeddings |
+|---|---|
+| Ollama | ✅ `nomic-embed-text` (configurable) |
+| OpenAI / LM Studio / NVIDIA NIM | ✅ `text-embedding-3-small` |
+| Anthropic, Gemini, xAI | ❌ — configure Ollama as fallback |
+
+### Automatic fallback
+
+You can set a **fallback provider** alongside your primary one. If a request fails — rate limit, network error, local server down — Braces retries it transparently on the fallback. A common setup is a cloud model as primary with local Ollama as backup (or the reverse, to keep things local by default).
+
+### Configuration
+
+Providers are configured in `~/.config/braces/braces.toml`:
+
+```toml
+[ai]
+primary  = "ollama"      # ollama | anthropic | openai | lmstudio | xai | gemini | nvidia
+fallback = "anthropic"
+autocomplete = true
+
+[providers.anthropic]
+model = "claude-opus-4-8"
+
+[providers.ollama]
+host        = "http://localhost:11434"
+model       = "llama3.2"
+embed_model = "nomic-embed-text"
+```
+
+**API keys are never stored in this file.** They're encrypted with AES-256-GCM and kept in your OS keychain — enter them under **Settings → API keys**.
+
+### What the AI can do
+
+Whichever provider you pick drives these three features:
+
+- **Chat panel** (`Ctrl+Shift+A`) — a conversation per tab, with an agentic loop that can run shell commands as tools and inject them straight into the active terminal. Chats persist across restarts.
+- **Code review** (`Ctrl+Shift+R`) — reviews your working diff in a side panel.
+- **Semantic history search** (`Ctrl+R`) — every command you run is embedded and indexed, so you can search history by meaning instead of exact text. Needs a provider that supports embeddings (see above); with Anthropic, Gemini or xAI as your only provider, commands are silently not indexed.
+
+Inline command suggestions (the ghost text as you type, `→` to accept) are **not** AI-driven — they're prefix matches against your own shell history, so they work with no provider configured.
 
 ---
 

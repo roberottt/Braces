@@ -2,7 +2,7 @@
 # All API keys are stored encrypted in the OS keychain, never here.
 
 [ai]
-primary  = "ollama"      # ollama | anthropic | openai | lmstudio | xai | gemini
+primary  = "ollama"      # ollama | anthropic | openai | lmstudio | xai | gemini | nvidia
 fallback = "anthropic"
 autocomplete = true
 
