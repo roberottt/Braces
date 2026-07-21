@@ -1,3 +1,5 @@
+import { isWindows } from "../platform";
+
 /** Graphite palette — matches NEON_NOIR_THEME in BracesTerminal */
 const PAL = [
   '#000000','#f0726f','#6fcf97','#e0b07a',
@@ -346,7 +348,18 @@ export class TermScreen {
       flushRun();
       out.push(lineHtml);
     }
-    return out.join('<br>');
+    const html = out.join('<br>');
+    // Windows only: ConPTY drives a very tall (BLOCK_ROWS) virtual screen and
+    // repaints with ABSOLUTE cursor positioning, so a command's output lands at
+    // whatever row the cursor sits at in that buffer. That leaves large runs of
+    // empty rows *between* content lines (e.g. `git status`: the header near the
+    // top, "nothing to commit" far below) — rendered here as long <br> runs, the
+    // "montón de espacio" gap. Trailing-blank trimming can't catch a mid-block
+    // gap. Real command output never has this many consecutive blank lines, so
+    // collapse a run of 5+ empty lines (6+ consecutive <br>) down to a single
+    // blank line. Unix PTYs stream plain \n and never hit this, so it's gated to
+    // Windows to keep macOS/Linux output byte-for-byte unchanged.
+    return isWindows ? html.replace(/(?:<br>){6,}/g, '<br><br>') : html;
   }
 }
 
