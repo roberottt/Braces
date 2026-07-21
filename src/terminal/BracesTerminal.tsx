@@ -1515,14 +1515,6 @@ const BracesTerminal: Component<Props> = (props) => {
                 <div class={`cmd-block ${statusCls()}`} data-cwd={block().cwd}>
                   <div class="cmd-block-header">
                     <span class="cmd-block-cwd">⬡ {blockCwd()}</span>
-                    <Show when={block().done && block().exitCode !== null}>
-                      <span class={`cmd-block-status ${block().exitCode === 0 ? "ok" : "err"}`}>
-                        {block().exitCode === 0 ? "✓" : `✕ ${block().exitCode}`}
-                      </span>
-                    </Show>
-                    <Show when={elapsed() !== null}>
-                      <span class="cmd-block-elapsed">{elapsed()}</span>
-                    </Show>
                     <Show when={!block().done}>
                       <span class="cmd-block-spinner">●</span>
                       <button
@@ -1551,6 +1543,14 @@ const BracesTerminal: Component<Props> = (props) => {
                           onClick={() => explainBlock(block())}>✦</button>
                       </Show>
                     </div>
+                    <Show when={block().done && block().exitCode !== null}>
+                      <span class={`cmd-block-status ${block().exitCode === 0 ? "ok" : "err"}`}>
+                        {block().exitCode === 0 ? "✓" : `✕ ${block().exitCode}`}
+                      </span>
+                    </Show>
+                    <Show when={elapsed() !== null}>
+                      <span class="cmd-block-elapsed">{elapsed()}</span>
+                    </Show>
                   </div>
                   <div class="cmd-block-cmd">
                     <span class="cmd-block-chevron">❯</span>

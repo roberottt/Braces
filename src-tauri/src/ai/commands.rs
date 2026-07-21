@@ -34,6 +34,20 @@ pub fn make_provider_explicit(
         .unwrap_or_else(|| Arc::new(MockProvider::default()))
 }
 
+/// Like `make_provider_explicit`, but returns `None` instead of falling back to
+/// the mock provider. Used by features that silently suggest things to the user
+/// (autocomplete, next-command) where a fake AI-looking response would be worse
+/// than no suggestion at all.
+fn make_provider_explicit_opt(
+    provider_name: &str,
+    model_override: &str,
+    host_override: Option<&str>,
+    cfg: &Config,
+) -> Option<Arc<dyn AiProvider>> {
+    let model = if model_override.is_empty() { None } else { Some(model_override) };
+    make_named(provider_name, cfg, model, host_override)
+}
+
 fn make_named(
     name: &str,
     cfg: &Config,
@@ -320,7 +334,11 @@ pub async fn ai_autocomplete(
 
     // Use the provider the user picked in the UI, not the TOML primary — most
     // users never create a config file, so the primary is the "ollama" default.
-    let provider = make_provider_explicit(&provider_name, &model, host.as_deref(), state.inner());
+    // No mock fallback here: an unconfigured provider should suggest nothing,
+    // not a fake-looking completion.
+    let Some(provider) = make_provider_explicit_opt(&provider_name, &model, host.as_deref(), state.inner()) else {
+        return Ok(String::new());
+    };
 
     let mut context = format!("Working directory: {cwd}");
     if let Some(branch) = git_branch.as_deref().filter(|b| !b.is_empty()) {
@@ -436,7 +454,9 @@ pub async fn ai_suggest_next(
          {context}"
     );
 
-    let provider = make_provider_explicit(&provider_name, &model, host.as_deref(), state.inner());
+    let Some(provider) = make_provider_explicit_opt(&provider_name, &model, host.as_deref(), state.inner()) else {
+        return Ok(String::new());
+    };
     let result = collect(provider, &prompt).await?;
     let suggestion = extract_command(&result);
 

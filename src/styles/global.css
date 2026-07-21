@@ -417,8 +417,8 @@ html[data-platform="linux"] .app { border-radius: 0; }
 
 .cmd-block-cwd { color: var(--fg-dim); }
 
-.cmd-block-status.ok  { color: var(--accent-lime); margin-left: auto; }
-.cmd-block-status.err { color: var(--accent-red);  margin-left: auto; }
+.cmd-block-status.ok  { color: var(--accent-lime); }
+.cmd-block-status.err { color: var(--accent-red);  }
 
 .cmd-block-elapsed { color: var(--fg-dim); }
 
@@ -451,7 +451,7 @@ html[data-platform="linux"] .app { border-radius: 0; }
   display: flex;
   align-items: center;
   gap: 3px;
-  margin-left: 6px;
+  margin-left: auto;
   opacity: 0;
   transition: opacity 0.12s;
 }
