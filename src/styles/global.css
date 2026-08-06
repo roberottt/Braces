@@ -428,7 +428,6 @@ html[data-platform="linux"] .app { border-radius: 0; }
 
 .cmd-block-spinner {
   color: var(--accent-cyan);
-  margin-left: auto;
   animation: cmd-pulse 1.2s ease-in-out infinite;
 }
 

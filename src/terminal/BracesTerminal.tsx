@@ -1515,14 +1515,6 @@ const BracesTerminal: Component<Props> = (props) => {
                 <div class={`cmd-block ${statusCls()}`} data-cwd={block().cwd}>
                   <div class="cmd-block-header">
                     <span class="cmd-block-cwd">⬡ {blockCwd()}</span>
-                    <Show when={!block().done}>
-                      <span class="cmd-block-spinner">●</span>
-                      <button
-                        class="cmd-block-stop"
-                        title={t(store.language, "stop_cmd_tip")}
-                        onClick={() => sendRaw("\x03")}
-                      >■</button>
-                    </Show>
                     <div class="cmd-block-actions">
                       <button class="cmd-block-action" title={t(store.language, "block_rerun")}
                         onClick={() => rerunBlock(block().cmd)}>↻</button>
@@ -1543,6 +1535,14 @@ const BracesTerminal: Component<Props> = (props) => {
                           onClick={() => explainBlock(block())}>✦</button>
                       </Show>
                     </div>
+                    <Show when={!block().done}>
+                      <span class="cmd-block-spinner">●</span>
+                      <button
+                        class="cmd-block-stop"
+                        title={t(store.language, "stop_cmd_tip")}
+                        onClick={() => sendRaw("\x03")}
+                      >■</button>
+                    </Show>
                     <Show when={block().done && block().exitCode !== null}>
                       <span class={`cmd-block-status ${block().exitCode === 0 ? "ok" : "err"}`}>
                         {block().exitCode === 0 ? "✓" : `✕ ${block().exitCode}`}
