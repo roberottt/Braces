@@ -1722,7 +1722,6 @@ const BracesTerminal: Component<Props> = (props) => {
               </svg>
               <span class="wib-cwd">{shortCwd()}</span>
             </span>
-            <span class="wib-meta-spacer" />
             <Show when={store.gitIsRepo}>
               <button
                 class="wib-git-branch"
@@ -1743,7 +1742,17 @@ const BracesTerminal: Component<Props> = (props) => {
                 title={t(store.language, "view_changes_tip")}
                 onClick={() => { setShowBranchPanel(false); setStore("gitPanelOpen", v => !v); }}
               >
-                <Show when={store.gitInsertions > 0 || store.gitDeletions > 0} fallback={<span class="wib-git-clean">✓</span>}>
+                <Show
+                  when={store.gitChangedCount > 0 || store.gitInsertions > 0 || store.gitDeletions > 0}
+                  fallback={<span class="wib-git-clean">✓</span>}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                  <span class="wib-git-files">{store.gitChangedCount}</span>
+                  <span class="wib-git-sep">•</span>
                   <span class="wib-git-ins">+{store.gitInsertions}</span>
                   <span class="wib-git-del">−{store.gitDeletions}</span>
                 </Show>
