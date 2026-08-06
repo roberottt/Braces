@@ -5,12 +5,17 @@ pub mod db;
 pub mod git;
 pub mod metrics;
 pub mod pty;
+pub mod shell_env;
 pub mod vault;
 
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Adopt the login shell's PATH before anything resolves a binary, so the
+    // backend sees the same tools the user's terminal does.
+    shell_env::hydrate_process_path();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {

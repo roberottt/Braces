@@ -268,10 +268,10 @@ html[data-platform="linux"] .app { border-radius: 0; }
   inset: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 10px 12px 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
   z-index: 1;
 }
 
@@ -391,24 +391,28 @@ html[data-platform="linux"] .app { border-radius: 0; }
 
 
 /* ── Command blocks ──────────────────────────────────────────────────────── */
+/* Flat, edge-to-edge rows: no card chrome — blocks are separated only by a
+   hairline rule, so the whole list reads as one continuous terminal surface. */
 .cmd-block {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-m);
-  box-shadow: var(--shadow-1);
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
   font-family: var(--font-term);
   font-size: 13px;
   flex-shrink: 0;
   overflow: hidden;
-  transition: border-color 0.15s;
+  padding: 8px 0 10px;
+  transition: background 0.15s;
 }
-.cmd-block:hover { border-color: var(--border-strong); }
+.cmd-block:hover { background: color-mix(in srgb, var(--fg) 3%, transparent); }
 
 .cmd-block-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 14px 0;
+  padding: 0 16px;
   font-family: var(--font-term);
   font-size: 11px;
   color: var(--fg-dim);
@@ -424,7 +428,6 @@ html[data-platform="linux"] .app { border-radius: 0; }
 
 .cmd-block-spinner {
   color: var(--accent-cyan);
-  margin-left: auto;
   animation: cmd-pulse 1.2s ease-in-out infinite;
 }
 
@@ -480,7 +483,7 @@ html[data-platform="linux"] .app { border-radius: 0; }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 14px;
+  padding: 2px 16px 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--fg);
@@ -494,7 +497,7 @@ html[data-platform="linux"] .app { border-radius: 0; }
 }
 
 .cmd-block-output {
-  padding: 4px 14px 10px;
+  padding: 4px 16px 0;
   font-size: 12.5px;
   line-height: 1.45;
   color: var(--fg);
@@ -715,59 +718,88 @@ html[data-platform="linux"] .app { border-radius: 0; }
   z-index: 3;
   display: flex;
   flex-direction: column;
-  padding: 0 12px 12px;
+  padding: 0;
   pointer-events: none; /* children re-enable */
 }
 .wib-container > * { pointer-events: auto; }
 
-/* Floating card — solid bg: backdrop-filter + border-radius produces jagged
-   aliased corners in WebView2, and over a pure-black terminal glass adds nothing. */
+/* Popovers that stack above the bar keep the old floating inset; only the input
+   bar itself is flush with the terminal. */
+.wib-container > .branch-panel,
+.wib-container > .tab-comp-panel,
+.wib-container > .hist-panel {
+  margin-left: 12px;
+  margin-right: 12px;
+}
+
+/* Not a floating card: the bar is part of the terminal surface — same
+   background as the block area, separated only by a hairline rule. */
 .wib {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-l);
-  box-shadow: var(--shadow-2);
-  padding: 10px 16px 12px;
+  background: var(--bg-primary);
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 14px 12px 18px; /* horizontal padding matches .braces-blocks */
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  gap: 10px;
+  transition: border-color 0.15s;
 }
-/* Focus cue is deliberately quiet: the border brightens a touch (neutral, not
-   themed) and the chevron lights up — see .wib-chevron below. */
+/* Focus cue is deliberately quiet: the separator brightens a touch (neutral,
+   not themed) and the chevron lights up — see .wib-chevron below. */
 .wib:focus-within {
-  border-color: color-mix(in srgb, var(--fg) 24%, transparent);
+  border-top-color: color-mix(in srgb, var(--fg) 18%, transparent);
 }
 
 
-/* Meta row: icon + cwd + exit code */
+/* Meta row: a left-aligned strip of status chips (cwd, branch, diff counts).
+   All chips share one shape and are told apart by the colour of their icon and
+   text, not by their outline. Those colours are the theme accents muted towards
+   --fg-mid (see --chip-* below) so the strip reads as quiet metadata rather
+   than competing with the command output above it. */
 .wib-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-family: var(--font-label);
-  font-size: 10px;
+  gap: 6px;
+  font-family: var(--font-term);
+  font-size: 11px;
+  font-weight: 500;
   color: var(--fg-dim);
   user-select: none;
+
+  --chip-green: color-mix(in srgb, var(--accent-lime) 55%, var(--fg-mid));
+  --chip-mag:   color-mix(in srgb, var(--accent-mag) 55%, var(--fg-mid));
+  --chip-red:   color-mix(in srgb, var(--accent-red) 55%, var(--fg-mid));
+  --chip-amber: color-mix(in srgb, var(--accent-amber) 45%, var(--fg-mid));
 }
 
-/* Path shown as a pill: folder icon + cwd in a rounded chip */
-.wib-cwd-pill {
+/* Shared chip shape. Applied via the shorthand classes below rather than a
+   utility class in the markup, so the JSX keeps semantic names. */
+.wib-cwd-pill,
+.wib-git-branch,
+.wib-git-changes {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--bg-tertiary);
+  background: color-mix(in srgb, var(--bg-tertiary) 70%, transparent);
   border: 1px solid var(--border);
   border-radius: 7px;
   padding: 3px 9px;
-  max-width: 60%;
-  min-width: 0;
-}
-.wib-folder { color: var(--accent); flex-shrink: 0; }
-.wib-cwd {
-  color: var(--fg);
   font-family: var(--font-term);
   font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.wib-cwd-pill {
+  max-width: 55%;
+  min-width: 0;
+}
+.wib-folder { color: var(--chip-green); flex-shrink: 0; }
+.wib-cwd {
+  color: var(--chip-green);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -795,7 +827,7 @@ html[data-platform="linux"] .app { border-radius: 0; }
   flex: 1;
   display: flex;
   align-items: center;
-  min-height: 26px;
+  min-height: 30px;
 }
 
 /* Ghost text: same font metrics as the input so characters align exactly */
@@ -879,32 +911,26 @@ html[data-platform="linux"] .app { border-radius: 0; }
   width: 100%;
 }
 
+/* Password prompt: the syntax-highlight overlay is blanked out while masking, so
+   the input itself has to paint its own (dotted) text. */
+.wib-input.secret {
+  color: var(--fg);
+  letter-spacing: 0.12em;
+}
+
 .wib-input::placeholder { color: var(--fg-dim); opacity: 0.6; }
 .wib-input:disabled { opacity: 0.35; cursor: not-allowed; }
 
-/* ── WIB git pills ──────────────────────────────────────────────────────── */
-.wib-meta-spacer { flex: 1; }
-
+/* ── WIB git chips (shape comes from the shared rule above) ─────────────── */
 .wib-git-branch,
 .wib-git-changes {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 8px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  font-family: var(--font-label);
-  font-size: 10px;
-  color: var(--fg-mid);
+  color: var(--chip-mag);
   cursor: pointer;
   transition: color 0.12s, border-color 0.12s, background 0.12s;
-  white-space: nowrap;
 }
 .wib-git-branch:hover,
 .wib-git-changes:hover {
   border-color: color-mix(in srgb, var(--accent) 50%, transparent);
-  color: var(--fg);
 }
 .wib-git-branch.active,
 .wib-git-changes.active {
@@ -912,11 +938,19 @@ html[data-platform="linux"] .app { border-radius: 0; }
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
-.wib-git-changes { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
-.wib-git-ins   { color: var(--accent-lime); }
-.wib-git-del   { color: var(--accent-red); }
-.wib-git-clean { color: var(--fg-mid); }
+.wib-git-changes {
+  color: var(--fg-mid);
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.wib-git-files { color: var(--fg-mid); }
+.wib-git-sep   { color: var(--chip-amber); }
+.wib-git-ins   { color: var(--chip-green); }
+.wib-git-del   { color: var(--chip-red); }
+.wib-git-clean { color: var(--chip-green); }
 /* Inherit the accent colour when the button is active (panel open) */
+.wib-git-changes.active .wib-git-files,
+.wib-git-changes.active .wib-git-sep,
 .wib-git-changes.active .wib-git-ins,
 .wib-git-changes.active .wib-git-del,
 .wib-git-changes.active .wib-git-clean { color: inherit; }
@@ -2166,13 +2200,11 @@ html[data-platform="linux"] .app { border-radius: 0; }
   color: var(--bg-secondary);
   font-size: 17px;
   line-height: 1;
-  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent);
-  transition: background 0.15s, box-shadow 0.15s;
+  transition: background 0.15s;
 }
 .status-bar .sb-item.sb-icon.sb-settings:hover,
 .status-bar .sb-item.sb-icon.sb-settings.open {
   background: color-mix(in srgb, var(--accent) 82%, var(--fg));
-  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
 /* ── Settings modal ──────────────────────────────────────────────────────── */

@@ -91,6 +91,26 @@ const parseCwdMarker = (bracketed: string): { cwd: string; exitCode: number | nu
   return { cwd: bracketed.replace(/^\[CWD:/, "").replace(/\]$/, ""), exitCode: null };
 };
 
+// ── Secret (password) prompt detection ───────────────────────────────────────
+// A program reading a secret turns terminal echo off, so it prints nothing back
+// for what the user types. In stdin mode the typed line lives in our own <input>,
+// which WOULD show it in plain text — so we watch the tail of the running block's
+// output and mask the input while it ends in a password-style prompt.
+const ANSI_RE = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b[@-Z\\-_]/g;
+const stripAnsi = (s: string): string => s.replace(ANSI_RE, "").replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
+
+// Matches the last line of output when it is a prompt asking for a secret:
+// "Password:", "[sudo] password for roberto:", "Enter passphrase for key '…':",
+// "Contraseña:", "Enter PIN:", "Verification code:" …
+const SECRET_PROMPT_RE =
+  /(?:^|[\s\]'"(])(?:password|passphrase|passwd|contrase(?:ñ|n)a|clave|pin|secret|token|verification code|c(?:ó|o)digo de verificaci(?:ó|o)n)\b[^\r\n]{0,60}[:?]\s*$/i;
+
+const looksLikeSecretPrompt = (tail: string): boolean => {
+  // Only the trailing line matters: the cursor sits there waiting for input.
+  const lastLine = tail.replace(/\r/g, "\n").split("\n").pop() ?? "";
+  return SECRET_PROMPT_RE.test(lastLine);
+};
+
 // ── Command-line syntax highlighting ─────────────────────────────────────────
 // The input box is a plain <input> (can't hold coloured spans), so we mirror the
 // typed text in an overlay div whose tokens are wrapped in coloured spans while
@@ -304,6 +324,13 @@ const BracesTerminal: Component<Props> = (props) => {
   // without the prompt marker we can never detect the command finishing, and
   // the input would stay in stdin mode forever.
   const stdinMode = () => shellHasMarker() && hasRunningBlock() && !isInteractive();
+  // True while the running command's output ends in a password-style prompt.
+  // `outputTail` is the plain-text tail it's computed from (see appendOutput).
+  const [secretPrompt, setSecretPrompt] = createSignal(false);
+  let outputTail = "";
+  // Mask the input box: the program echoes nothing, so the typed secret would
+  // otherwise sit in the input (and in the syntax-highlight overlay) in plain text.
+  const secretMode = () => stdinMode() && secretPrompt();
 
   // When the command ends, pull focus back to the input in case the user
   // clicked into the block output while it was running.
@@ -365,7 +392,9 @@ const BracesTerminal: Component<Props> = (props) => {
   };
 
   // Coloured mirror of the typed command (rendered into .wib-highlight overlay).
-  const highlightHtml = createMemo(() => highlightCmd(cmdText()));
+  // Empty while a secret is being typed — the overlay renders the raw text and
+  // would defeat the masked <input> underneath it.
+  const highlightHtml = createMemo(() => (secretMode() ? "" : highlightCmd(cmdText())));
 
   // Keep the colour overlay + ghost scrolled in lock-step with the input so the
   // tokens stay aligned once the command is wider than the visible box.
@@ -548,6 +577,10 @@ const BracesTerminal: Component<Props> = (props) => {
 
   const appendOutput = (text: string) => {
     if (!activeBlockId) return;
+    // Keep a small plain-text tail of the output so we can tell when the running
+    // program is asking for a password (see secretMode below).
+    outputTail = (outputTail + stripAnsi(text)).slice(-256);
+    setSecretPrompt(looksLikeSecretPrompt(outputTail));
     activeScreen.write(text);
     if (!renderQueued) {
       renderQueued = true;
@@ -573,6 +606,8 @@ const BracesTerminal: Component<Props> = (props) => {
     setCompletedTick(n => n + 1);
     activeBlockId = "";
     activeScreen = mkScreen();
+    outputTail = "";
+    setSecretPrompt(false);
     // Persist blocks to SQLite (errors surface in the console)
     persistBlocks();
     // Always fire git-refresh after every command completion so the branch pill
@@ -849,10 +884,15 @@ const BracesTerminal: Component<Props> = (props) => {
         e.preventDefault();
         const text = cmdText();
         setCmdText("");
+        // The answer is on its way to the program: drop the masked state now so a
+        // program that prints nothing after reading it doesn't leave the next line
+        // masked. Any re-prompt ("Sorry, try again.") re-arms it via appendOutput.
+        setSecretPrompt(false);
+        outputTail = "";
         sendRaw(text + "\r");
         return;
       }
-      if (e.ctrlKey && e.key === "c") { e.preventDefault(); setCmdText(""); sendRaw("\x03"); return; }
+      if (e.ctrlKey && e.key === "c") { e.preventDefault(); setCmdText(""); setSecretPrompt(false); sendRaw("\x03"); return; }
       if (e.ctrlKey && e.key === "d") { e.preventDefault(); sendRaw("\x04"); return; }
       if (e.key === "Escape") { e.preventDefault(); sendRaw("\x1b"); return; }
       if (e.key === "Tab" || e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
@@ -1515,14 +1555,6 @@ const BracesTerminal: Component<Props> = (props) => {
                 <div class={`cmd-block ${statusCls()}`} data-cwd={block().cwd}>
                   <div class="cmd-block-header">
                     <span class="cmd-block-cwd">⬡ {blockCwd()}</span>
-                    <Show when={!block().done}>
-                      <span class="cmd-block-spinner">●</span>
-                      <button
-                        class="cmd-block-stop"
-                        title={t(store.language, "stop_cmd_tip")}
-                        onClick={() => sendRaw("\x03")}
-                      >■</button>
-                    </Show>
                     <div class="cmd-block-actions">
                       <button class="cmd-block-action" title={t(store.language, "block_rerun")}
                         onClick={() => rerunBlock(block().cmd)}>↻</button>
@@ -1543,6 +1575,14 @@ const BracesTerminal: Component<Props> = (props) => {
                           onClick={() => explainBlock(block())}>✦</button>
                       </Show>
                     </div>
+                    <Show when={!block().done}>
+                      <span class="cmd-block-spinner">●</span>
+                      <button
+                        class="cmd-block-stop"
+                        title={t(store.language, "stop_cmd_tip")}
+                        onClick={() => sendRaw("\x03")}
+                      >■</button>
+                    </Show>
                     <Show when={block().done && block().exitCode !== null}>
                       <span class={`cmd-block-status ${block().exitCode === 0 ? "ok" : "err"}`}>
                         {block().exitCode === 0 ? "✓" : `✕ ${block().exitCode}`}
@@ -1722,7 +1762,6 @@ const BracesTerminal: Component<Props> = (props) => {
               </svg>
               <span class="wib-cwd">{shortCwd()}</span>
             </span>
-            <span class="wib-meta-spacer" />
             <Show when={store.gitIsRepo}>
               <button
                 class="wib-git-branch"
@@ -1743,7 +1782,17 @@ const BracesTerminal: Component<Props> = (props) => {
                 title={t(store.language, "view_changes_tip")}
                 onClick={() => { setShowBranchPanel(false); setStore("gitPanelOpen", v => !v); }}
               >
-                <Show when={store.gitInsertions > 0 || store.gitDeletions > 0} fallback={<span class="wib-git-clean">✓</span>}>
+                <Show
+                  when={store.gitChangedCount > 0 || store.gitInsertions > 0 || store.gitDeletions > 0}
+                  fallback={<span class="wib-git-clean">✓</span>}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                  <span class="wib-git-files">{store.gitChangedCount}</span>
+                  <span class="wib-git-sep">•</span>
                   <span class="wib-git-ins">+{store.gitInsertions}</span>
                   <span class="wib-git-del">−{store.gitDeletions}</span>
                 </Show>
@@ -1765,13 +1814,15 @@ const BracesTerminal: Component<Props> = (props) => {
               <input
                 ref={inputRef}
                 class="wib-input"
-                type="text"
+                classList={{ secret: secretMode() }}
+                type={secretMode() ? "password" : "text"}
                 value={cmdText()}
                 onInput={e => { setCmdText(e.currentTarget.value); setShowHistPanel(false); setShowTabPanel(false); setTabCompletions([]); requestAnimationFrame(syncScroll); }}
                 onScroll={syncScroll}
                 onKeyDown={handleKeyDown}
                 placeholder={
                   !ptyReady() ? t(store.language, "connecting_ph")
+                  : secretMode() ? t(store.language, "secret_stdin_ph")
                   : stdinMode() ? t(store.language, "running_stdin_ph")
                   // A next-command suggestion occupies the same space as the
                   // placeholder, so drop the placeholder while one is showing.
