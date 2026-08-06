@@ -210,6 +210,7 @@ const T = {
     run_commands_ph:       "Run commands…",
     connecting_ph:         "Connecting…",
     running_stdin_ph:      "Command running — type to answer it · Ctrl+C to stop",
+    secret_stdin_ph:       "Password — hidden while you type · Ctrl+C to cancel",
     stop_cmd_tip:          "Stop command (Ctrl+C)",
 
     // Editor view
@@ -433,6 +434,7 @@ const T = {
     run_commands_ph:       "Ejecutar comandos…",
     connecting_ph:         "Conectando…",
     running_stdin_ph:      "Comando en ejecución — escribe para responderle · Ctrl+C para detener",
+    secret_stdin_ph:       "Contraseña — oculta mientras escribes · Ctrl+C para cancelar",
     stop_cmd_tip:          "Detener comando (Ctrl+C)",
 
     // Editor view

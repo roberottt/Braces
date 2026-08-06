@@ -911,6 +911,13 @@ html[data-platform="linux"] .app { border-radius: 0; }
   width: 100%;
 }
 
+/* Password prompt: the syntax-highlight overlay is blanked out while masking, so
+   the input itself has to paint its own (dotted) text. */
+.wib-input.secret {
+  color: var(--fg);
+  letter-spacing: 0.12em;
+}
+
 .wib-input::placeholder { color: var(--fg-dim); opacity: 0.6; }
 .wib-input:disabled { opacity: 0.35; cursor: not-allowed; }
 
