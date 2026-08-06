@@ -2193,13 +2193,11 @@ html[data-platform="linux"] .app { border-radius: 0; }
   color: var(--bg-secondary);
   font-size: 17px;
   line-height: 1;
-  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent);
-  transition: background 0.15s, box-shadow 0.15s;
+  transition: background 0.15s;
 }
 .status-bar .sb-item.sb-icon.sb-settings:hover,
 .status-bar .sb-item.sb-icon.sb-settings.open {
   background: color-mix(in srgb, var(--accent) 82%, var(--fg));
-  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
 /* ── Settings modal ──────────────────────────────────────────────────────── */
