@@ -172,8 +172,11 @@ fn default_shell_cmd() -> (CommandBuilder, String) {
         }
         if let Some(pwsh) = find_powershell() {
             let mut cmd = CommandBuilder::new(&pwsh);
-            // NoLogo suppresses the banner; NoProfile speeds startup
-            cmd.args(["-NoLogo", "-NoProfile"]);
+            // NoLogo suppresses the banner. The profile is deliberately loaded:
+            // it is where installers and tools (conda init, version managers,
+            // manual $env:PATH edits) put their setup, and skipping it leaves the
+            // session resolving stale binaries.
+            cmd.args(["-NoLogo"]);
             return (cmd, "pwsh".into());
         }
         let shell = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into());
@@ -185,7 +188,39 @@ fn default_shell_cmd() -> (CommandBuilder, String) {
             .or_else(|_| std::env::var("SHELL"))
             .unwrap_or_else(|_| "/bin/bash".into());
         let name = classify_shell(&shell);
-        (CommandBuilder::new(shell), name)
+        let mut cmd = CommandBuilder::new(shell);
+        if use_login_shell(&name) {
+            cmd.arg("-l");
+        }
+        (cmd, name)
+    }
+}
+
+/// Whether the shell should be started as a login shell.
+///
+/// On macOS the app is launched by launchd with a bare `PATH`, and the files
+/// that repair it — `/etc/zprofile` (which runs `path_helper` over `/etc/paths`
+/// and `/etc/paths.d`), `~/.zprofile`, `~/.bash_profile` — are read by *login*
+/// shells only. Installers write there: the python.org package appends to
+/// `~/.zprofile`, Homebrew drops a file in `/etc/paths.d`. Without `-l` none of
+/// it is applied and the session keeps resolving the system copy of a tool
+/// after the user has installed a newer one. Terminal.app and iTerm2 both
+/// start login shells for this reason.
+///
+/// Linux is left alone: the desktop session already sources the user's profile
+/// before launching the app, and forcing a bash login shell there would read
+/// `~/.bash_profile` *instead of* `~/.bashrc`, losing the interactive config.
+/// Set `BRACES_LOGIN_SHELL=0` to opt out, or `=1` to force it on.
+#[cfg(not(windows))]
+fn use_login_shell(shell_name: &str) -> bool {
+    // Only shells that accept `-l`; a bare `sh` on some systems does not.
+    if !matches!(shell_name, "bash" | "zsh" | "fish") {
+        return false;
+    }
+    match std::env::var("BRACES_LOGIN_SHELL").as_deref() {
+        Ok("0") | Ok("false") => false,
+        Ok("1") | Ok("true") => true,
+        _ => cfg!(target_os = "macos"),
     }
 }
 
